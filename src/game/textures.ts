@@ -18,6 +18,10 @@ export interface ProceduralTextureSet {
   glowDisc: THREE.CanvasTexture;
   shadowDisc: THREE.CanvasTexture;
   headlightBeam: THREE.CanvasTexture;
+  featherAlbedo: THREE.CanvasTexture;
+  featherBump: THREE.CanvasTexture;
+  foamRing: THREE.CanvasTexture;
+  wakeFoam: THREE.CanvasTexture;
   dispose: () => void;
 }
 
@@ -372,6 +376,98 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
   const headlightBeam = new THREE.CanvasTexture(hlCan);
   headlightBeam.colorSpace = THREE.SRGBColorSpace;
 
+  // 16. Subtle Duck Plumage Albedo & Bump Maps (256x256)
+  const [faCan, faCtx] = makeCanvas(256, 256);
+  const [fbCan, fbCtx] = makeCanvas(256, 256);
+  faCtx.fillStyle = '#fef08a';
+  faCtx.fillRect(0, 0, 256, 256);
+  fbCtx.fillStyle = '#808080';
+  fbCtx.fillRect(0, 0, 256, 256);
+  for (let row = 0; row < 16; row++) {
+    const y = row * 16;
+    const xOff = (row % 2) * 16;
+    for (let col = -1; col < 9; col++) {
+      const x = col * 32 + xOff;
+      faCtx.fillStyle = (row + col) % 2 === 0 ? '#fde047' : '#fef08a';
+      faCtx.beginPath();
+      faCtx.ellipse(x + 16, y + 10, 15, 9, 0, 0, Math.PI * 2);
+      faCtx.fill();
+
+      fbCtx.fillStyle = '#a4a4a4';
+      fbCtx.beginPath();
+      fbCtx.ellipse(x + 16, y + 10, 14, 8, 0, 0, Math.PI * 2);
+      fbCtx.fill();
+      fbCtx.strokeStyle = '#585858';
+      fbCtx.lineWidth = 2;
+      fbCtx.stroke();
+    }
+  }
+  const featherAlbedo = new THREE.CanvasTexture(faCan);
+  featherAlbedo.colorSpace = THREE.SRGBColorSpace;
+  featherAlbedo.wrapS = THREE.RepeatWrapping;
+  featherAlbedo.wrapT = THREE.RepeatWrapping;
+  featherAlbedo.repeat.set(2, 2);
+  featherAlbedo.anisotropy = aniso;
+
+  const featherBump = new THREE.CanvasTexture(fbCan);
+  featherBump.wrapS = THREE.RepeatWrapping;
+  featherBump.wrapT = THREE.RepeatWrapping;
+  featherBump.repeat.set(2, 2);
+  featherBump.anisotropy = aniso;
+
+  // 17. Contact Foam Ring Texture for islands, pillars, and obstacles (sRGB)
+  const [frCan, frCtx] = makeCanvas(256, 256);
+  frCtx.clearRect(0, 0, 256, 256);
+  const frGrad = frCtx.createRadialGradient(128, 128, 42, 128, 128, 124);
+  frGrad.addColorStop(0, 'rgba(255, 255, 255, 0.0)');
+  frGrad.addColorStop(0.42, 'rgba(224, 247, 255, 0.85)');
+  frGrad.addColorStop(0.68, 'rgba(255, 255, 255, 0.65)');
+  frGrad.addColorStop(0.86, 'rgba(186, 230, 253, 0.25)');
+  frGrad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+  frCtx.fillStyle = frGrad;
+  frCtx.beginPath();
+  frCtx.arc(128, 128, 124, 0, Math.PI * 2);
+  frCtx.fill();
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2;
+    const rr = 82 + (i % 5) * 6;
+    frCtx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    frCtx.beginPath();
+    frCtx.arc(128 + Math.cos(a) * rr, 128 + Math.sin(a) * rr, 5 + (i % 3) * 2.5, 0, Math.PI * 2);
+    frCtx.fill();
+  }
+  const foamRing = new THREE.CanvasTexture(frCan);
+  foamRing.colorSpace = THREE.SRGBColorSpace;
+  foamRing.anisotropy = aniso;
+
+  // 18. Craft V-Wake Foam Texture (facing +X, trailing toward -X)
+  const [wfCan, wfCtx] = makeCanvas(256, 256);
+  wfCtx.clearRect(0, 0, 256, 256);
+  const wfGrad = wfCtx.createLinearGradient(236, 128, 16, 128);
+  wfGrad.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+  wfGrad.addColorStop(0.45, 'rgba(224, 247, 255, 0.65)');
+  wfGrad.addColorStop(1, 'rgba(186, 230, 253, 0.0)');
+  wfCtx.fillStyle = wfGrad;
+  wfCtx.beginPath();
+  wfCtx.moveTo(232, 128);
+  wfCtx.lineTo(14, 18);
+  wfCtx.lineTo(42, 128);
+  wfCtx.lineTo(14, 238);
+  wfCtx.closePath();
+  wfCtx.fill();
+  for (let i = 0; i < 42; i++) {
+    const x = 32 + ((i * 53) % 185);
+    const spread = ((232 - x) / 218) * 98;
+    const y = 128 + (i % 2 === 0 ? 1 : -1) * spread * (0.45 + (i % 4) * 0.14);
+    wfCtx.fillStyle = 'rgba(255, 255, 255, 0.52)';
+    wfCtx.beginPath();
+    wfCtx.arc(x, y, 3 + (i % 4) * 2.2, 0, Math.PI * 2);
+    wfCtx.fill();
+  }
+  const wakeFoam = new THREE.CanvasTexture(wfCan);
+  wakeFoam.colorSpace = THREE.SRGBColorSpace;
+  wakeFoam.anisotropy = aniso;
+
   const allTextures = [
     waterNormal,
     waterRoughness,
@@ -390,6 +486,10 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
     glowDisc,
     shadowDisc,
     headlightBeam,
+    featherAlbedo,
+    featherBump,
+    foamRing,
+    wakeFoam,
   ];
 
   return {
@@ -410,6 +510,10 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
     glowDisc,
     shadowDisc,
     headlightBeam,
+    featherAlbedo,
+    featherBump,
+    foamRing,
+    wakeFoam,
     dispose: () => allTextures.forEach((t) => t.dispose()),
   };
 }

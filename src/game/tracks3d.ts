@@ -598,30 +598,82 @@ export function buildTrackScene(
     group.add(new THREE.Mesh(geo(buildRibbonGeometry(br.samples, false, 1.6, -0.07)), bankMat));
   }
 
-  // 3. Wet Specular Track Water Channel + Glazed Arctic Ice Patches
+  // 3. Stylized PBR Water Surface (Dual Crossed Normal Waves + Depth Gradient + Shoreline Foam)
   const waterMat = mat(
     isSoftwareGl
       ? new THREE.MeshStandardMaterial({
-          color: new THREE.Color(track.waterBase),
+          color: 0xffffff,
           map: textures.waterAlbedo,
           normalMap: textures.waterNormal,
           normalScale: new THREE.Vector2(0.85, 0.85),
           roughnessMap: textures.waterRoughness,
           roughness: track.biome === 'lagoon' ? 0.14 : 0.18,
-          metalness: track.biome === 'lagoon' ? 0.16 : 0.25,
+          metalness: track.biome === 'lagoon' ? 0.18 : 0.25,
         })
       : new THREE.MeshPhysicalMaterial({
-          color: new THREE.Color(track.waterBase),
+          color: 0xffffff,
           map: textures.waterAlbedo,
           normalMap: textures.waterNormal,
           normalScale: new THREE.Vector2(0.95, 0.95),
           roughnessMap: textures.waterRoughness,
-          roughness: 0.12,
-          metalness: track.biome === 'lagoon' ? 0.14 : 0.22,
+          roughness: 0.14,
+          metalness: track.biome === 'lagoon' ? 0.16 : 0.22,
           clearcoat: 1.0,
-          clearcoatRoughness: 0.07,
+          clearcoatRoughness: 0.08,
+          envMapIntensity: 1.45,
         })
   );
+  const waterDeepColor = new THREE.Color(track.waterBase);
+  const waterShallowColor = new THREE.Color(track.waterHighlight);
+  const waterFoamColor = new THREE.Color(track.biome === 'volcano' ? 0xfdba74 : 0xe0f7ff);
+  waterMat.customProgramCacheKey = () => `water_pbr_${track.id}_${isSoftwareGl ? 'sw' : 'hw'}`;
+  waterMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uWaterTime = { value: 0 };
+    shader.uniforms.uWaterDeep = { value: waterDeepColor };
+    shader.uniforms.uWaterShallow = { value: waterShallowColor };
+    shader.uniforms.uFoamColor = { value: waterFoamColor };
+    shader.uniforms.uWaterNormalTex = { value: textures.waterNormal };
+    waterMat.userData.shader = shader;
+
+    shader.vertexShader =
+      `varying vec3 vWaterWorldPos;\nvarying float vChannelU;\nvarying vec3 vViewRight;\nvarying vec3 vViewFwd;\n` +
+      shader.vertexShader.replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+        vec4 waterWp = modelMatrix * vec4(transformed, 1.0);
+        vWaterWorldPos = waterWp.xyz;
+        vChannelU = uv.x;
+        vViewRight = normalize((modelViewMatrix * vec4(1.0, 0.0, 0.0, 0.0)).xyz);
+        vViewFwd = normalize((modelViewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);`
+      );
+
+    shader.fragmentShader =
+      `uniform float uWaterTime;\nuniform vec3 uWaterDeep;\nuniform vec3 uWaterShallow;\nuniform vec3 uFoamColor;\nuniform sampler2D uWaterNormalTex;\nvarying vec3 vWaterWorldPos;\nvarying float vChannelU;\nvarying vec3 vViewRight;\nvarying vec3 vViewFwd;\n` +
+      shader.fragmentShader
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+          float edgeProx = abs(vChannelU - 0.5) * 2.0;
+          float shallowMix = smoothstep(0.32, 0.94, edgeProx);
+          vec3 waterTint = mix(uWaterDeep, uWaterShallow, shallowMix * 0.82);
+          diffuseColor.rgb *= waterTint;
+          float shoreWave = sin(vWaterWorldPos.x * 0.52 + uWaterTime * 3.1) * cos(vWaterWorldPos.z * 0.52 - uWaterTime * 2.7);
+          float foamBand = smoothstep(0.76, 0.99, edgeProx + shoreWave * 0.08);
+          diffuseColor.rgb = mix(diffuseColor.rgb, uFoamColor, foamBand * 0.65);`
+        )
+        .replace(
+          '#include <normal_fragment_maps>',
+          `#include <normal_fragment_maps>
+          vec2 wUv1 = vWaterWorldPos.xz * 0.068 + vec2(uWaterTime * 0.045, -uWaterTime * 0.085);
+          vec2 wUv2 = vWaterWorldPos.xz * 0.115 + vec2(-uWaterTime * 0.062, -uWaterTime * 0.038);
+          vec3 rn1 = texture2D(uWaterNormalTex, wUv1).xyz * 2.0 - 1.0;
+          vec3 rn2 = texture2D(uWaterNormalTex, wUv2).xyz * 2.0 - 1.0;
+          float rnx = (rn1.x + rn2.x * 0.72) * 0.28;
+          float rnz = (rn1.y + rn2.y * 0.72) * 0.28;
+          normal = normalize(normal + vViewRight * rnx + vViewFwd * rnz);`
+        );
+  };
+
   const mainWater = new THREE.Mesh(geo(buildRibbonGeometry(track.main, true, 0, 0.0)), waterMat);
   mainWater.receiveShadow = true;
   group.add(mainWater);
@@ -630,6 +682,18 @@ export function buildTrackScene(
     brWater.receiveShadow = true;
     group.add(brWater);
   }
+
+  // Contact Foam Collars shared material for pillars, ramps, and obstacles
+  const contactFoamMat = mat(
+    new THREE.MeshBasicMaterial({
+      map: textures.foamRing,
+      color: track.biome === 'volcano' ? 0xfdba74 : 0xe0f7ff,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+    })
+  );
+  const contactFoamMeshes: { mesh: THREE.Mesh; baseScale: number; phase: number }[] = [];
 
   // Arctic Ice Water Glazed Sheet Overlay
   if (track.biome === 'arctic') {
@@ -706,6 +770,20 @@ export function buildTrackScene(
     }
     colInst.computeBoundingSphere();
     group.add(colInst);
+
+    const pillarFoamGeo = geo(new THREE.PlaneGeometry(2.5, 2.5));
+    pillarFoamGeo.rotateX(-Math.PI / 2);
+    const pillarFoamInst = new THREE.InstancedMesh(pillarFoamGeo, contactFoamMat, pillarCoords.length);
+    for (let i = 0; i < pillarCoords.length; i++) {
+      const pc = pillarCoords[i];
+      dummy.position.set(pc.x, 0.03, pc.z);
+      dummy.rotation.set(0, i * 0.7, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      pillarFoamInst.setMatrixAt(i, dummy.matrix);
+    }
+    pillarFoamInst.computeBoundingSphere();
+    group.add(pillarFoamInst);
   }
 
   // Lava Channel Glow Strip (Volcano)
@@ -714,7 +792,7 @@ export function buildTrackScene(
       new THREE.MeshStandardMaterial({
         color: 0xf97316,
         emissive: new THREE.Color(0xea580c),
-        emissiveIntensity: 1.75,
+        emissiveIntensity: 2.1,
         roughness: 0.35,
       })
     );
@@ -730,9 +808,9 @@ export function buildTrackScene(
     new THREE.MeshStandardMaterial({
       color: new THREE.Color(track.neonAccent),
       emissive: new THREE.Color(track.neonAccent),
-      emissiveIntensity: 1.45,
+      emissiveIntensity: 1.85,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.78,
       roughness: 0.2,
     })
   );
@@ -847,7 +925,7 @@ export function buildTrackScene(
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(track.neonAccent),
         emissive: new THREE.Color(track.neonAccent),
-        emissiveIntensity: 2.2,
+        emissiveIntensity: 2.4,
         roughness: 0.2,
       })
     );
@@ -971,7 +1049,7 @@ export function buildTrackScene(
     new THREE.MeshStandardMaterial({
       color: 0xfacc15,
       emissive: new THREE.Color(0xfacc15),
-      emissiveIntensity: 2.6,
+      emissiveIntensity: 2.8,
       roughness: 0.2,
     })
   );
@@ -1014,7 +1092,7 @@ export function buildTrackScene(
     new THREE.MeshStandardMaterial({
       color: new THREE.Color(track.neonSecondary),
       emissive: new THREE.Color(track.neonSecondary),
-      emissiveIntensity: 1.9,
+      emissiveIntensity: 2.2,
       roughness: 0.2,
     })
   );
@@ -1345,6 +1423,12 @@ export function buildTrackScene(
       lip.position.set(1.82, 0.72, 0);
       rg.add(lip);
     }
+    const rampFoamGeo = geo(new THREE.PlaneGeometry(5.6, 5.8));
+    rampFoamGeo.rotateX(-Math.PI / 2);
+    const rampFoam = new THREE.Mesh(rampFoamGeo, contactFoamMat);
+    rampFoam.position.y = 0.036;
+    rg.add(rampFoam);
+    contactFoamMeshes.push({ mesh: rampFoam, baseScale: 1.0, phase: rm.x * 0.01 });
     group.add(rg);
   }
 
@@ -1533,6 +1617,14 @@ export function buildTrackScene(
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.04;
       obGroup.add(ring);
+
+      const obFoamSize = ob.r * WORLD_SCALE * 2.7;
+      const obFoamGeo = geo(new THREE.PlaneGeometry(obFoamSize, obFoamSize));
+      obFoamGeo.rotateX(-Math.PI / 2);
+      const obFoam = new THREE.Mesh(obFoamGeo, contactFoamMat);
+      obFoam.position.y = 0.034;
+      obGroup.add(obFoam);
+      contactFoamMeshes.push({ mesh: obFoam, baseScale: 1.0, phase: ob.phase });
     }
 
     group.add(obGroup);
@@ -1619,7 +1711,7 @@ export function buildTrackScene(
       map: textures.powerBox,
       emissiveMap: textures.powerBox,
       emissive: new THREE.Color(0xffffff),
-      emissiveIntensity: 0.85,
+      emissiveIntensity: 1.65,
       roughness: 0.2,
     })
   );
@@ -1827,16 +1919,25 @@ export function buildTrackScene(
       textures.waterNormal.offset.set(simTime * 0.04, -simTime * 0.08);
       textures.waterAlbedo.offset.set(simTime * 0.02, -simTime * 0.14);
 
+      if (waterMat.userData.shader) {
+        waterMat.userData.shader.uniforms.uWaterTime.value = simTime;
+      }
+
+      for (const cf of contactFoamMeshes) {
+        const pulse = cf.baseScale * (0.94 + Math.sin(simTime * 3.2 + cf.phase) * 0.08);
+        cf.mesh.scale.set(pulse, 1, pulse);
+      }
+
       if (track.biome === 'pirate') {
         oceanMesh.position.y = -0.18 + Math.sin(simTime * 2.2) * 0.18;
       }
 
       for (const cm of chevronMats) {
-        cm.emissiveIntensity = 1.45 + Math.sin(simTime * 6.5) * 0.55;
+        cm.emissiveIntensity = 1.65 + Math.sin(simTime * 6.5) * 0.55;
       }
 
       for (let i = 0; i < tunnelStripMats.length; i++) {
-        tunnelStripMats[i].emissiveIntensity = 2.2 + Math.sin(simTime * 4.5 + i * 1.4) * 0.65;
+        tunnelStripMats[i].emissiveIntensity = 2.4 + Math.sin(simTime * 4.5 + i * 1.4) * 0.7;
       }
 
       for (const m of mantaSwimmers) {

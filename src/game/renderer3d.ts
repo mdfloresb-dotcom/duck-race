@@ -1,5 +1,8 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import {
   WORLD_SCALE,
   mapTrackToWorld,
@@ -9,7 +12,11 @@ import {
   type CameraMode,
   type ChaseCamState,
 } from './hydroEngine';
-import { createProceduralTextures, type ProceduralTextureSet } from './textures';
+import {
+  createProceduralTextures,
+  createSkyDomeTexture,
+  type ProceduralTextureSet,
+} from './textures';
 import { buildCraftMesh, type CraftMeshHandle } from './vehicles3d';
 import { buildTrackScene, type CompiledTrack, type TrackSceneHandle } from './tracks3d';
 
@@ -49,6 +56,7 @@ export interface RacerSimState {
   spinTimer: number;
   spinVisual: number;
   braking: boolean;
+  accelerating?: boolean;
   inTunnel: boolean;
   stats: { velocidadMax: number; aceleracion: number; manejo: number; turbo: number };
 }
@@ -137,6 +145,21 @@ export class HydroSceneRenderer {
   private baseFogDensity = 0.0072;
   private tunnelBlend = 0;
 
+  private composer: EffectComposer | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+  private envRenderTarget: THREE.WebGLRenderTarget | null = null;
+
+  private maxDpr: number;
+  private currentDpr: number;
+  private readonly minDpr = 1.0;
+  private lastViewportW = window.innerWidth;
+  private lastViewportH = window.innerHeight;
+  private perfLastNow = performance.now();
+  private perfAccumSec = 0;
+  private perfFrames = 0;
+  private lowFpsDuration = 0;
+  private highFpsDuration = 0;
+
   private trackHandle: TrackSceneHandle | null = null;
   private activeTrackId = '';
   private craftHandles: CraftMeshHandle[] = [];
@@ -146,6 +169,8 @@ export class HydroSceneRenderer {
   private particleMat: THREE.MeshBasicMaterial;
   private scratchDummy = new THREE.Object3D();
   private scratchColor = new THREE.Color();
+  private scratchVec = new THREE.Vector3();
+  private scratchCamFwd = new THREE.Vector3();
 
   private missileGroup: THREE.Group[] = [];
   private missileGeo: THREE.BufferGeometry;
@@ -202,6 +227,9 @@ export class HydroSceneRenderer {
     this.minimapCanvas = minimapCanvas;
     this.minimapCtx = minimapCanvas.getContext('2d')!;
 
+    this.maxDpr = this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    this.currentDpr = this.maxDpr;
+
     this.renderer = new THREE.WebGLRenderer({
       antialias: !this.isSoftwareGl,
       powerPreference: 'high-performance',
@@ -209,9 +237,7 @@ export class HydroSceneRenderer {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
-    this.renderer.setPixelRatio(
-      this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2)
-    );
+    this.renderer.setPixelRatio(this.currentDpr);
     this.renderer.shadowMap.enabled = !this.isSoftwareGl;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -235,9 +261,20 @@ export class HydroSceneRenderer {
       520
     );
 
-    const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmremGenerator.dispose();
+    if (!this.isSoftwareGl) {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.setPixelRatio(this.currentDpr);
+      this.composer.setSize(window.innerWidth, window.innerHeight);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        0.45,
+        0.6,
+        0.85
+      );
+      this.composer.addPass(this.bloomPass);
+      this.composer.addPass(new OutputPass());
+    }
 
     this.hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x041224, 0.85);
     this.scene.add(this.hemiLight);
@@ -356,15 +393,87 @@ export class HydroSceneRenderer {
     this.resize(window.innerWidth, window.innerHeight);
   }
 
+  private generateTrackEnvironment(track: CompiledTrack): void {
+    const envScene = new THREE.Scene();
+    const skyTex = createSkyDomeTexture(
+      track.skyTop,
+      track.skyHorizon,
+      track.neonAccent,
+      track.biome
+    );
+    const skyGeo = new THREE.SphereGeometry(50, 24, 16);
+    const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
+    envScene.add(new THREE.Mesh(skyGeo, skyMat));
+
+    const keyCol =
+      track.biome === 'lagoon'
+        ? new THREE.Color(0xfffbeb).multiplyScalar(2.4)
+        : new THREE.Color(track.neonAccent).multiplyScalar(1.9);
+    const rimCol = new THREE.Color(track.neonSecondary).multiplyScalar(1.6);
+    const bounceGeo = new THREE.SphereGeometry(6, 10, 8);
+    const keyMat = new THREE.MeshBasicMaterial({ color: keyCol });
+    const rimMat = new THREE.MeshBasicMaterial({ color: rimCol });
+    const keyOrb = new THREE.Mesh(bounceGeo, keyMat);
+    keyOrb.position.set(28, 28, 16);
+    envScene.add(keyOrb);
+    const rimOrb = new THREE.Mesh(bounceGeo, rimMat);
+    rimOrb.position.set(-30, 16, -24);
+    envScene.add(rimOrb);
+
+    const waterFloorGeo = new THREE.PlaneGeometry(110, 110);
+    waterFloorGeo.rotateX(-Math.PI / 2);
+    const waterFloorMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(track.waterBase),
+    });
+    const waterFloor = new THREE.Mesh(waterFloorGeo, waterFloorMat);
+    waterFloor.position.y = -12;
+    envScene.add(waterFloor);
+
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    pmrem.compileEquirectangularShader();
+    const nextEnvTarget = pmrem.fromScene(envScene, 0.03);
+    if (this.envRenderTarget) {
+      this.envRenderTarget.dispose();
+    }
+    this.envRenderTarget = nextEnvTarget;
+    this.scene.environment = nextEnvTarget.texture;
+
+    pmrem.dispose();
+    skyGeo.dispose();
+    skyMat.dispose();
+    skyTex.dispose();
+    bounceGeo.dispose();
+    keyMat.dispose();
+    rimMat.dispose();
+    waterFloorGeo.dispose();
+    waterFloorMat.dispose();
+  }
+
+  private applyRendererResolution(w: number, h: number): void {
+    this.renderer.setPixelRatio(this.currentDpr);
+    this.renderer.setSize(w, h);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.currentDpr);
+      this.composer.setSize(w, h);
+    }
+    if (this.bloomPass) {
+      this.bloomPass.resolution.set(w, h);
+    }
+  }
+
   public resize(width: number, height: number): void {
     const w = Math.max(1, width);
     const h = Math.max(1, height);
+    this.lastViewportW = w;
+    this.lastViewportH = h;
+    this.maxDpr = this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    this.currentDpr = Math.min(this.maxDpr, Math.max(this.minDpr, this.currentDpr));
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
-    const dpr = this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2);
-    this.fxCanvas.width = Math.floor(w * dpr);
-    this.fxCanvas.height = Math.floor(h * dpr);
+    this.applyRendererResolution(w, h);
+    const uiDpr = this.maxDpr;
+    this.fxCanvas.width = Math.floor(w * uiDpr);
+    this.fxCanvas.height = Math.floor(h * uiDpr);
   }
 
   public setTrack(track: CompiledTrack): void {
@@ -375,6 +484,8 @@ export class HydroSceneRenderer {
       this.scene.remove(this.trackHandle.group);
       this.trackHandle.dispose();
     }
+
+    this.generateTrackEnvironment(track);
 
     this.baseFogDensity =
       track.biome === 'swamp'
@@ -506,6 +617,7 @@ export class HydroSceneRenderer {
         pitch,
         spinVisual: r.spinVisual,
         braking: r.braking,
+        accelerating: r.accelerating,
         drifting: r.lateralSlip > 85,
         driftStage: r.driftStage,
         turboActive: r.turboTimer > 0 || r.miniTurboTimer > 0,
@@ -690,9 +802,45 @@ export class HydroSceneRenderer {
       }
     }
 
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer && !this.isSoftwareGl) {
+      this.composer.render();
 
-    // Update & render 2D FX Overlay (Speed Streaks, Water Droplets on Hood POV, Squid Ink Blots, Visor FX)
+      // Dynamic Pixel Ratio 60 FPS optimizer for Retina/Mobile screens
+      const now = performance.now();
+      const frameElapsed = Math.min(0.25, Math.max(0.001, (now - this.perfLastNow) / 1000));
+      this.perfLastNow = now;
+      this.perfAccumSec += frameElapsed;
+      this.perfFrames++;
+      if (this.perfAccumSec >= 0.5) {
+        const avgFps = this.perfFrames / this.perfAccumSec;
+        if (avgFps < 55) {
+          this.lowFpsDuration += this.perfAccumSec;
+          this.highFpsDuration = 0;
+          if (this.lowFpsDuration >= 0.7 && this.currentDpr > this.minDpr) {
+            this.currentDpr = Math.max(this.minDpr, Number((this.currentDpr - 0.15).toFixed(2)));
+            this.applyRendererResolution(this.lastViewportW, this.lastViewportH);
+            this.lowFpsDuration = 0;
+          }
+        } else if (avgFps > 58.5) {
+          this.highFpsDuration += this.perfAccumSec;
+          this.lowFpsDuration = 0;
+          if (this.highFpsDuration >= 3.0 && this.currentDpr < this.maxDpr) {
+            this.currentDpr = Math.min(this.maxDpr, Number((this.currentDpr + 0.1).toFixed(2)));
+            this.applyRendererResolution(this.lastViewportW, this.lastViewportH);
+            this.highFpsDuration = 0;
+          }
+        } else {
+          this.lowFpsDuration = 0;
+          this.highFpsDuration = 0;
+        }
+        this.perfAccumSec = 0;
+        this.perfFrames = 0;
+      }
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+
+    // Update & render 2D FX Overlay (Speed Streaks, Lens Flare, Water Droplets, Squid Ink, Visor FX)
     if (params.waterSplashIntensity > 0.1 && Math.random() < params.waterSplashIntensity) {
       this.spawnWaterDroplets(effectiveCamMode === 'hood' ? 3 : 1);
     }
@@ -702,6 +850,36 @@ export class HydroSceneRenderer {
       d.life -= dt;
       d.y += d.vy * dt;
       if (d.life <= 0 || d.y > 1.05) d.active = false;
+    }
+
+    // Compute Sun/Moon Optical Flare Screen Position when outside tunnels
+    let flareX = -10;
+    let flareY = -10;
+    let flareAlpha = 0;
+    let flareColor = '#fef08a';
+    const inTunnelNow = Boolean(focusRacer?.inTunnel);
+    if (!inTunnelNow && (track.biome === 'lagoon' || track.biome === 'pirate' || track.biome === 'arctic')) {
+      if (track.biome === 'lagoon') {
+        this.scratchVec.set(0.42, 0.34, 0.84).normalize();
+        flareColor = '#fef08a';
+      } else if (track.biome === 'pirate') {
+        this.scratchVec.set(-0.52, 0.36, -0.77).normalize();
+        flareColor = '#e2e8f0';
+      } else {
+        this.scratchVec.set(0.36, 0.28, -0.89).normalize();
+        flareColor = '#34d399';
+      }
+      this.camera.getWorldDirection(this.scratchCamFwd);
+      const facingDot = this.scratchVec.dot(this.scratchCamFwd);
+      if (facingDot > 0.42) {
+        this.scratchVec.multiplyScalar(280).add(this.camera.position);
+        this.scratchVec.project(this.camera);
+        if (Math.abs(this.scratchVec.x) <= 1.05 && Math.abs(this.scratchVec.y) <= 1.05) {
+          flareX = (this.scratchVec.x * 0.5 + 0.5) * this.fxCanvas.width;
+          flareY = (-this.scratchVec.y * 0.5 + 0.5) * this.fxCanvas.height;
+          flareAlpha = Math.min(0.45, (facingDot - 0.42) * 0.85);
+        }
+      }
     }
 
     this.renderFxOverlay(
@@ -716,7 +894,11 @@ export class HydroSceneRenderer {
       ),
       Boolean(focusRacer && focusRacer.shieldTimer > 0),
       Boolean(focusRacer && focusRacer.empTimer > 0),
-      inkSplatters
+      inkSplatters,
+      flareX,
+      flareY,
+      flareAlpha,
+      flareColor
     );
 
     if (gameState === 'playing') {
@@ -733,7 +915,11 @@ export class HydroSceneRenderer {
     boostActive: boolean,
     shieldActive: boolean,
     empActive: boolean,
-    inkSplatters: InkSplatterState[]
+    inkSplatters: InkSplatterState[],
+    flareX: number,
+    flareY: number,
+    flareAlpha: number,
+    flareColor: string
   ): void {
     const w = this.fxCanvas.width;
     const h = this.fxCanvas.height;
@@ -743,6 +929,36 @@ export class HydroSceneRenderer {
     const cx = w * 0.5;
     const cy = h * 0.5;
     const maxR = Math.hypot(cx, cy);
+
+    // 0. Subtle Optical Sun / Moon Lens Flare
+    if (flareAlpha > 0.02) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = flareAlpha;
+      const sunGrad = ctx.createRadialGradient(flareX, flareY, 2, flareX, flareY, maxR * 0.16);
+      sunGrad.addColorStop(0, '#ffffff');
+      sunGrad.addColorStop(0.28, flareColor);
+      sunGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath();
+      ctx.arc(flareX, flareY, maxR * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+
+      const dx = cx - flareX;
+      const dy = cy - flareY;
+      const ghosts = [0.35, 0.72, 1.32];
+      for (let g = 0; g < ghosts.length; g++) {
+        const gx = flareX + dx * ghosts[g];
+        const gy = flareY + dy * ghosts[g];
+        const gr = maxR * (0.025 + g * 0.012);
+        ctx.globalAlpha = flareAlpha * (0.28 - g * 0.06);
+        ctx.fillStyle = g === 1 ? '#38bdf8' : flareColor;
+        ctx.beginPath();
+        ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     // 1. High-Speed Wind / Foam Streak Lines (>80% speed or Boost)
     if (intensity > 0.05) {
@@ -988,6 +1204,8 @@ export class HydroSceneRenderer {
     this.mineCoreMat.dispose();
     this.mineGlowMat.dispose();
     this.textures.dispose();
+    this.envRenderTarget?.dispose();
+    this.composer?.dispose();
     this.renderer.dispose();
   }
 }

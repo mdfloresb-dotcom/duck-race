@@ -585,6 +585,7 @@ function main(): void {
         spinTimer: 0,
         spinVisual: 0,
         braking: false,
+        accelerating: false,
         inTunnel: sf.tunnel !== null,
         stats,
         heldItem: null,
@@ -648,6 +649,7 @@ function main(): void {
         spinTimer: 0,
         spinVisual: 0,
         braking: false,
+        accelerating: false,
         inTunnel: sf.tunnel !== null,
         stats: aiStats,
         heldItem: null,
@@ -1554,6 +1556,7 @@ function main(): void {
           throttle = Math.abs(diff) > 0.85 ? 0.65 : r.aiSkill;
           r.braking = Math.abs(diff) > 0.95;
 
+          r.accelerating = throttle > 0.15;
           if (r.heldItem) {
             r.aiItemCooldown -= dt;
             let closestAheadDist = Infinity;
@@ -1583,8 +1586,10 @@ function main(): void {
             }
           }
         }
+        if (r.isPlayer) r.accelerating = throttle > 0.15;
       } else {
         r.braking = false;
+        r.accelerating = false;
       }
 
       const phys = stepCraftPhysics({
@@ -2099,10 +2104,10 @@ function main(): void {
       if (sw.r >= sw.maxR) shockwaves.splice(i, 1);
     }
 
-    // Ambient Biome Weather Particles (Snow, Falling Magma Embers, Golden Fireflies)
+    // Ambient Biome Weather & Atmosphere Particles (Snow, Embers, Fireflies, Sea Mist, Neon Motes)
     const focus = racers[0];
-    if (focus && (currentTrack.biome === 'arctic' || currentTrack.biome === 'volcano' || currentTrack.biome === 'swamp')) {
-      const spawnChance = currentTrack.biome === 'arctic' ? 0.85 : 0.55;
+    if (focus) {
+      const spawnChance = currentTrack.biome === 'arctic' ? 0.85 : 0.48;
       if (Math.random() < spawnChance) {
         const fwdX = Math.cos(focus.angle);
         const fwdY = Math.sin(focus.angle);
@@ -2115,8 +2120,14 @@ function main(): void {
           spawnParticle(px, py, baseZ + 6 + Math.random() * 6, -40, 20, -2.2, 0.16, 1.3, 0xf8fafc);
         } else if (currentTrack.biome === 'volcano') {
           spawnParticle(px, py, baseZ + 2 + Math.random() * 8, (Math.random() - 0.5) * 40, (Math.random() - 0.5) * 40, 1.8, 0.17, 1.1, 0xf97316);
-        } else {
+        } else if (currentTrack.biome === 'swamp') {
           spawnParticle(px, py, baseZ + 0.8 + Math.random() * 3.5, (Math.random() - 0.5) * 28, (Math.random() - 0.5) * 28, 0.6, 0.15, 1.4, 0xfacc15);
+        } else if (currentTrack.biome === 'city') {
+          spawnParticle(px, py, baseZ + 1.2 + Math.random() * 5.0, (Math.random() - 0.5) * 22, (Math.random() - 0.5) * 22, 0.4, 0.14, 1.2, 0x38bdf8);
+        } else if (currentTrack.biome === 'pirate') {
+          spawnParticle(px, py, baseZ + 1.0 + Math.random() * 4.5, -32, 18, 0.5, 0.16, 1.3, 0xe2e8f0);
+        } else {
+          spawnParticle(px, py, baseZ + 0.8 + Math.random() * 4.0, (Math.random() - 0.5) * 24, (Math.random() - 0.5) * 24, 0.5, 0.15, 1.3, 0xfef08a);
         }
       }
     }

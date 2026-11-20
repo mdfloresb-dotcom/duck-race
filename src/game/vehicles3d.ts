@@ -21,6 +21,11 @@ export interface CraftMeshHandle {
   underglowMat: THREE.MeshBasicMaterial;
   underglowLight: THREE.PointLight | null;
   flameGroup: THREE.Group;
+  accelFlameGroup: THREE.Group;
+  propGroup: THREE.Group;
+  wingTrailsGroup: THREE.Group;
+  wakeFoamMesh: THREE.Mesh;
+  brakeWaterGlowMesh: THREE.Mesh;
   shieldMesh: THREE.Mesh;
   magnetRing: THREE.Mesh;
   contactShadow: THREE.Mesh;
@@ -35,6 +40,7 @@ export interface CraftMeshHandle {
     pitch: number;
     spinVisual: number;
     braking: boolean;
+    accelerating?: boolean;
     drifting: boolean;
     driftStage: 0 | 1 | 2;
     turboActive: boolean;
@@ -118,51 +124,68 @@ export function buildCraftMesh(
   const hullMat = trackMat(
     new THREE.MeshPhysicalMaterial({
       color: new THREE.Color(cfg.primaryColor),
-      roughness: 0.22,
-      metalness: 0.18,
-      clearcoat: 0.9,
-      clearcoatRoughness: 0.12,
+      roughness: 0.25,
+      metalness: 0.22,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.1,
+      envMapIntensity: 1.35,
     })
   );
   applyRimLighting(hullMat, cfg.underglowColor, cfg.isPlayer ? 0.85 : 0.72);
   const accentMat = trackMat(
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshPhysicalMaterial({
       color: new THREE.Color(cfg.accentColor),
-      roughness: 0.35,
-      metalness: 0.25,
+      roughness: 0.25,
+      metalness: 0.28,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.1,
+      envMapIntensity: 1.3,
     })
   );
   applyRimLighting(accentMat, '#e0f2fe', 0.48);
   const darkTrimMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x111827,
-      roughness: 0.78,
-      metalness: 0.15,
+      roughness: 0.72,
+      metalness: 0.22,
     })
   );
   const chromeMat = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: 0xf1f5f9,
+      roughness: 0.1,
+      metalness: 0.94,
+      clearcoat: 0.8,
+      clearcoatRoughness: 0.08,
+      envMapIntensity: 1.5,
+    })
+  );
+  const shockGoldMat = trackMat(
     new THREE.MeshStandardMaterial({
-      color: 0xe2e8f0,
-      roughness: 0.14,
-      metalness: 0.92,
+      color: 0xfacc15,
+      roughness: 0.22,
+      metalness: 0.85,
     })
   );
   const glassMat = trackMat(
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshPhysicalMaterial({
       color: 0x38bdf8,
-      roughness: 0.08,
-      metalness: 0.15,
+      roughness: 0.06,
+      metalness: 0.12,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.05,
+      envMapIntensity: 1.55,
       emissive: new THREE.Color(0x0284c7),
       emissiveIntensity: 0.35,
       transparent: true,
-      opacity: 0.82,
+      opacity: 0.78,
     })
   );
   const dashGlowMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x22d3ee,
       emissive: new THREE.Color(cfg.underglowColor),
-      emissiveIntensity: 1.9,
+      emissiveIntensity: 2.2,
       roughness: 0.15,
     })
   );
@@ -170,7 +193,7 @@ export function buildCraftMesh(
     new THREE.MeshStandardMaterial({
       color: 0xffffff,
       emissive: new THREE.Color(0xe0f2fe),
-      emissiveIntensity: 2.8,
+      emissiveIntensity: 3.2,
       roughness: 0.1,
     })
   );
@@ -178,7 +201,7 @@ export function buildCraftMesh(
     new THREE.MeshStandardMaterial({
       color: 0xef4444,
       emissive: new THREE.Color(0xff1122),
-      emissiveIntensity: 1.0,
+      emissiveIntensity: 1.4,
       roughness: 0.2,
     })
   );
@@ -198,7 +221,24 @@ export function buildCraftMesh(
   contactShadow.position.y = 0.018;
   root.add(contactShadow);
 
-  // Neon Underglow skirt disc
+  // Dynamic Craft V-Wake Foam Plane trailing behind stern
+  const wakeGeo = trackGeo(new THREE.PlaneGeometry(6.8, 3.8));
+  wakeGeo.rotateX(-Math.PI / 2);
+  wakeGeo.translate(-3.4, 0, 0);
+  const wakeMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      map: textures.wakeFoam,
+      color: 0xe0f7ff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    })
+  );
+  const wakeFoamMesh = new THREE.Mesh(wakeGeo, wakeMat);
+  wakeFoamMesh.position.y = 0.032;
+  root.add(wakeFoamMesh);
+
+  // Neon Underglow skirt disc + Emissive Bloom Tube Halo
   const glowGeo = trackGeo(new THREE.PlaneGeometry(5.6, 3.8));
   glowGeo.rotateX(-Math.PI / 2);
   const underglowMat = trackMat(
@@ -214,6 +254,38 @@ export function buildCraftMesh(
   const underglowMesh = new THREE.Mesh(glowGeo, underglowMat);
   underglowMesh.position.y = 0.042;
   root.add(underglowMesh);
+
+  const underglowRingMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: new THREE.Color(cfg.underglowColor),
+      emissive: new THREE.Color(cfg.underglowColor),
+      emissiveIntensity: 2.5,
+      roughness: 0.2,
+    })
+  );
+  const underglowRingGeo = trackGeo(new THREE.TorusGeometry(1.15, 0.045, 6, 24));
+  underglowRingGeo.rotateX(Math.PI / 2);
+  underglowRingGeo.scale(1.42, 1, 0.72);
+  const underglowRing = new THREE.Mesh(underglowRingGeo, underglowRingMat);
+  underglowRing.position.y = 0.06;
+  bodyPivot.add(underglowRing);
+
+  // Rear Brake Light Water Glow Spill
+  const brakeWaterGlowMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      map: textures.glowDisc,
+      color: 0xff1e38,
+      transparent: true,
+      opacity: 0.14,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  const brakeWaterGlowGeo = trackGeo(new THREE.PlaneGeometry(3.2, 2.6));
+  brakeWaterGlowGeo.rotateX(-Math.PI / 2);
+  const brakeWaterGlowMesh = new THREE.Mesh(brakeWaterGlowGeo, brakeWaterGlowMat);
+  brakeWaterGlowMesh.position.set(-2.3, 0.048, 0);
+  root.add(brakeWaterGlowMesh);
 
   let underglowLight: THREE.PointLight | null = null;
   if (cfg.isPlayer) {
@@ -231,7 +303,7 @@ export function buildCraftMesh(
       map: textures.headlightBeam,
       color: 0xe0f7ff,
       transparent: true,
-      opacity: cfg.isPlayer ? 0.62 : 0.36,
+      opacity: cfg.isPlayer ? 0.34 : 0.22,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
@@ -304,10 +376,15 @@ export function buildCraftMesh(
     bodyPivot.add(seat);
 
     for (const side of [-1, 1]) {
-      const pipe = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.11, 0.13, 0.34, 12)), chromeMat);
+      const pipe = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.1, 0.12, 0.34, 12)), chromeMat);
       pipe.rotation.z = Math.PI / 2;
       pipe.position.set(-1.52, 0.28, side * 0.24);
       bodyPivot.add(pipe);
+
+      const bore = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.072, 0.072, 0.06, 10)), darkTrimMat);
+      bore.rotation.z = Math.PI / 2;
+      bore.position.set(-1.67, 0.28, side * 0.24);
+      bodyPivot.add(bore);
     }
 
     pilotPos = [-0.15, 0.76, 0];
@@ -416,10 +493,15 @@ export function buildCraftMesh(
     bodyPivot.add(arch);
 
     for (const s of [-1, 1]) {
-      const pipe = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.11, 0.11, 0.3, 12)), chromeMat);
+      const pipe = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.105, 0.11, 0.3, 12)), chromeMat);
       pipe.rotation.z = Math.PI / 2;
       pipe.position.set(-1.66, 0.3, s * 0.44);
       bodyPivot.add(pipe);
+
+      const bore = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.072, 0.072, 0.05, 10)), darkTrimMat);
+      bore.rotation.z = Math.PI / 2;
+      bore.position.set(-1.79, 0.3, s * 0.44);
+      bodyPivot.add(bore);
     }
 
     pilotPos = [-0.28, 0.8, 0];
@@ -562,7 +644,7 @@ export function buildCraftMesh(
     tailSpreadZ = 0.42;
   }
 
-  // Twin LED Headlights & Rear Red LED Brake Taillights
+  // Twin LED Headlights, Side Air Intakes, Rear Shock Struts & Brake Taillights
   for (const s of [-1, 1]) {
     const hl = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.11, 10, 10)), headlightMat);
     hl.position.set(headlightX, 0.44, s * headlightSpreadZ);
@@ -571,77 +653,267 @@ export function buildCraftMesh(
     const tl = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.1, 0.12, 0.28)), brakeLights);
     tl.position.set(tailX, 0.44, s * tailSpreadZ);
     bodyPivot.add(tl);
+
+    // Side Aero Air Intakes + Glowing Vent Core
+    const intake = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.62, 0.18, 0.16)), darkTrimMat);
+    intake.position.set(0.28, 0.42, s * (tailSpreadZ + 0.3));
+    intake.rotation.y = s * 0.16;
+    bodyPivot.add(intake);
+
+    const ventCore = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.06, 0.11, 0.12)), dashGlowMat);
+    ventCore.position.set(0.58, 0.42, s * (tailSpreadZ + 0.26));
+    bodyPivot.add(ventCore);
+
+    // Rear Hydro-Suspension Shock Absorber Struts (Angled Coilovers)
+    const shockBody = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.04, 0.04, 0.32, 8)), shockGoldMat);
+    shockBody.position.set(tailX + 0.22, 0.4, s * (tailSpreadZ * 0.72));
+    shockBody.rotation.z = -0.58;
+    bodyPivot.add(shockBody);
+
+    const shockPiston = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.025, 0.025, 0.28, 8)), chromeMat);
+    shockPiston.position.set(tailX + 0.12, 0.26, s * (tailSpreadZ * 0.72));
+    shockPiston.rotation.z = -0.58;
+    bodyPivot.add(shockPiston);
   }
 
-  // Duck Pilot + Aviator Goggles + Fluttering Multi-Segment Scarf
+  // Spinning Rear Hydro-Propeller Assembly + Motion Blur Disc
+  const propGroup = new THREE.Group();
+  propGroup.position.set(tailX - 0.16, 0.22, 0);
+  bodyPivot.add(propGroup);
+
+  const propHub = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.08, 0.06, 0.22, 10)), chromeMat);
+  propHub.rotation.z = Math.PI / 2;
+  propGroup.add(propHub);
+
+  const bladeGeo = trackGeo(new THREE.BoxGeometry(0.03, 0.36, 0.09));
+  for (let b = 0; b < 3; b++) {
+    const blade = new THREE.Mesh(bladeGeo, chromeMat);
+    blade.rotation.x = (b / 3) * Math.PI * 2;
+    blade.rotation.y = 0.25;
+    propGroup.add(blade);
+  }
+
+  const propBlurMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      color: 0xbae6fd,
+      transparent: true,
+      opacity: 0.26,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  const propBlurDisc = new THREE.Mesh(trackGeo(new THREE.CircleGeometry(0.24, 16)), propBlurMat);
+  propBlurDisc.rotation.y = Math.PI / 2;
+  propGroup.add(propBlurDisc);
+
+  // High-Speed Wingtip Air Contrails (fade in smoothly at top speed / boost)
+  const wingTrailsGroup = new THREE.Group();
+  bodyPivot.add(wingTrailsGroup);
+  const trailMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      color: 0xe0f7ff,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  );
+  const trailGeo = trackGeo(new THREE.PlaneGeometry(2.6, 0.06));
+  trailGeo.rotateX(-Math.PI / 2);
+  trailGeo.translate(-1.3, 0, 0);
+  for (const s of [-1, 1]) {
+    const tr = new THREE.Mesh(trailGeo, trailMat);
+    tr.position.set(tailX + 0.1, 0.56, s * (tailSpreadZ + 0.32));
+    wingTrailsGroup.add(tr);
+  }
+
+  // Sculpted Duck Pilot + Feather PBR Texture + Racing Helmet + Mirror Goggles + 4-Seg Scarf
   const duckGroup = new THREE.Group();
   duckGroup.position.set(pilotPos[0], pilotPos[1], pilotPos[2]);
   bodyPivot.add(duckGroup);
 
   const duckFeatherMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xfde047, roughness: 0.58, metalness: 0.04 })
+    new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      map: textures.featherAlbedo,
+      bumpMap: textures.featherBump,
+      bumpScale: 0.016,
+      roughness: 0.25,
+      metalness: 0.04,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.1,
+      sheen: 0.55,
+      sheenColor: new THREE.Color(0xfef9c3),
+      envMapIntensity: 1.15,
+    })
   );
   const beakMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.45, metalness: 0.05 })
+    new THREE.MeshPhysicalMaterial({
+      color: 0xf97316,
+      roughness: 0.25,
+      metalness: 0.06,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.1,
+    })
+  );
+  const helmetMat = trackMat(
+    new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(cfg.accentColor),
+      roughness: 0.2,
+      metalness: 0.3,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+      envMapIntensity: 1.4,
+    })
   );
   const goggleLensMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
+    new THREE.MeshPhysicalMaterial({
+      color: 0xbae6fd,
       emissive: new THREE.Color(0x0ea5e9),
-      emissiveIntensity: 0.65,
-      roughness: 0.1,
-      metalness: 0.3,
+      emissiveIntensity: 0.45,
+      roughness: 0.06,
+      metalness: 0.92,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.04,
+      envMapIntensity: 1.65,
     })
   );
   const scarfMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: new THREE.Color(cfg.scarfColor), roughness: 0.82 })
+    new THREE.MeshStandardMaterial({ color: new THREE.Color(cfg.scarfColor), roughness: 0.78 })
   );
 
-  const torso = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.22, 0.28, 0.36, 12)), duckFeatherMat);
-  torso.position.y = 0.12;
+  // Sculpted Lathe Torso for rounded organic silhouette
+  const torsoProfile = [
+    new THREE.Vector2(0.01, -0.05),
+    new THREE.Vector2(0.27, 0.0),
+    new THREE.Vector2(0.31, 0.1),
+    new THREE.Vector2(0.26, 0.23),
+    new THREE.Vector2(0.18, 0.31),
+    new THREE.Vector2(0.01, 0.33),
+  ];
+  const torso = new THREE.Mesh(trackGeo(new THREE.LatheGeometry(torsoProfile, 16)), duckFeatherMat);
+  torso.position.y = 0.02;
+  torso.castShadow = true;
   duckGroup.add(torso);
 
-  const head = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.27, 16, 14)), duckFeatherMat);
+  // Upturned Duck Tail Tuft
+  const tailTuft = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(0.12, 0.24, 10)), duckFeatherMat);
+  tailTuft.rotation.z = 0.95;
+  tailTuft.position.set(-0.28, 0.14, 0);
+  duckGroup.add(tailTuft);
+
+  // Rounded Sculpted Duck Head + Cheek Bulge
+  const head = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.265, 18, 16)), duckFeatherMat);
+  head.scale.set(1.06, 0.98, 1.02);
   head.position.y = 0.44;
   head.castShadow = true;
   duckGroup.add(head);
 
-  const beak = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.14, 12, 10)), beakMat);
-  beak.scale.set(1.45, 0.55, 0.95);
-  beak.position.set(0.28, 0.41, 0);
-  duckGroup.add(beak);
+  // Two-Piece Sculpted Beak (Upper + Lower Bill)
+  const upperBeak = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.135, 14, 10)), beakMat);
+  upperBeak.scale.set(1.55, 0.38, 1.02);
+  upperBeak.position.set(0.28, 0.42, 0);
+  duckGroup.add(upperBeak);
 
-  const strap = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.278, 0.278, 0.11, 14)), darkTrimMat);
-  strap.position.set(0, 0.48, 0);
+  const lowerBeak = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.115, 12, 8)), beakMat);
+  lowerBeak.scale.set(1.35, 0.26, 0.86);
+  lowerBeak.position.set(0.25, 0.37, 0);
+  duckGroup.add(lowerBeak);
+
+  // Aerodynamic Racing Helmet Dome + Stripe Crest
+  const helmetGeo = trackGeo(new THREE.SphereGeometry(0.285, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.56));
+  const helmet = new THREE.Mesh(helmetGeo, helmetMat);
+  helmet.position.set(-0.02, 0.45, 0);
+  helmet.rotation.z = 0.18;
+  duckGroup.add(helmet);
+
+  const helmetStripe = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.36, 0.06, 0.09)), dashGlowMat);
+  helmetStripe.position.set(-0.03, 0.72, 0);
+  helmetStripe.rotation.z = 0.16;
+  duckGroup.add(helmetStripe);
+
+  const strap = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.278, 0.278, 0.095, 14)), darkTrimMat);
+  strap.position.set(0, 0.49, 0);
   duckGroup.add(strap);
 
+  // Mirror-Reflective Racing Goggles with Beveled Frame
   for (const s of [-1, 1]) {
-    const lens = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.085, 0.085, 0.07, 12)), goggleLensMat);
+    const rim = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.096, 0.096, 0.06, 14)), chromeMat);
+    rim.rotation.z = Math.PI / 2;
+    rim.position.set(0.21, 0.5, s * 0.105);
+    duckGroup.add(rim);
+
+    const lens = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.082, 0.082, 0.075, 14)), goggleLensMat);
     lens.rotation.z = Math.PI / 2;
-    lens.position.set(0.23, 0.49, s * 0.11);
+    lens.position.set(0.225, 0.5, s * 0.105);
     duckGroup.add(lens);
   }
 
   const scarfSegments: THREE.Mesh[] = [];
-  const scarfGeo = trackGeo(new THREE.BoxGeometry(0.32, 0.07, 0.16));
-  for (let i = 0; i < 3; i++) {
-    const seg = new THREE.Mesh(scarfGeo, scarfMat);
-    seg.position.set(-0.22 - i * 0.26, 0.26, 0);
+  for (let i = 0; i < 4; i++) {
+    const segGeo = trackGeo(new THREE.BoxGeometry(0.26 - i * 0.025, 0.065, 0.15 - i * 0.015));
+    const seg = new THREE.Mesh(segGeo, scarfMat);
+    seg.position.set(-0.21 - i * 0.22, 0.27, 0);
     duckGroup.add(seg);
     scarfSegments.push(seg);
   }
 
-  // Twin Turbo / Nitro Exhaust Flames
+  // Normal Acceleration Volumetric Blue Plasma Exhaust Cones
+  const accelFlameGroup = new THREE.Group();
+  accelFlameGroup.position.set(tailX - 0.12, 0.34, 0);
+  accelFlameGroup.visible = false;
+  bodyPivot.add(accelFlameGroup);
+
+  const accelBlueMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: new THREE.Color(0x0ea5e9),
+      emissiveIntensity: 2.6,
+      transparent: true,
+      opacity: 0.78,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  const accelCoreMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      color: 0xe0f2fe,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  const accelConeGeo = trackGeo(new THREE.ConeGeometry(0.14, 0.72, 10));
+  accelConeGeo.rotateZ(Math.PI / 2);
+  accelConeGeo.translate(-0.34, 0, 0);
+  const accelInnerGeo = trackGeo(new THREE.ConeGeometry(0.075, 0.46, 8));
+  accelInnerGeo.rotateZ(Math.PI / 2);
+  accelInnerGeo.translate(-0.22, 0, 0);
+
+  for (const s of [-1, 1]) {
+    const ao = new THREE.Mesh(accelConeGeo, accelBlueMat);
+    ao.position.z = s * (tailSpreadZ * 0.65);
+    accelFlameGroup.add(ao);
+    const ai = new THREE.Mesh(accelInnerGeo, accelCoreMat);
+    ai.position.z = s * (tailSpreadZ * 0.65);
+    accelFlameGroup.add(ai);
+  }
+
+  // Twin Turbo / Nitro Exhaust Flames (High-Emission Bloom Trigger)
   const flameGroup = new THREE.Group();
   flameGroup.position.set(tailX - 0.12, 0.36, 0);
   flameGroup.visible = false;
   bodyPivot.add(flameGroup);
 
   const outerFlameMat = trackMat(
-    new THREE.MeshBasicMaterial({
+    new THREE.MeshStandardMaterial({
       color: 0xf97316,
+      emissive: new THREE.Color(0xf97316),
+      emissiveIntensity: 3.0,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.92,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
@@ -650,17 +922,17 @@ export function buildCraftMesh(
     new THREE.MeshBasicMaterial({
       color: 0xfef08a,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.96,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
   );
-  const coneGeo = trackGeo(new THREE.ConeGeometry(0.22, 1.35, 10));
+  const coneGeo = trackGeo(new THREE.ConeGeometry(0.22, 1.4, 10));
   coneGeo.rotateZ(Math.PI / 2);
-  coneGeo.translate(-0.65, 0, 0);
-  const innerConeGeo = trackGeo(new THREE.ConeGeometry(0.12, 0.85, 10));
+  coneGeo.translate(-0.68, 0, 0);
+  const innerConeGeo = trackGeo(new THREE.ConeGeometry(0.12, 0.88, 10));
   innerConeGeo.rotateZ(Math.PI / 2);
-  innerConeGeo.translate(-0.42, 0, 0);
+  innerConeGeo.translate(-0.44, 0, 0);
 
   for (const s of [-1, 1]) {
     const fOut = new THREE.Mesh(coneGeo, outerFlameMat);
@@ -674,13 +946,14 @@ export function buildCraftMesh(
 
   // Active Bubble Shield Dome + Gold Magnet Ring
   const shieldMat = trackMat(
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshPhysicalMaterial({
       color: 0x38bdf8,
       emissive: new THREE.Color(0x0ea5e9),
-      emissiveIntensity: 0.9,
+      emissiveIntensity: 1.65,
       transparent: true,
       opacity: 0.28,
-      roughness: 0.1,
+      roughness: 0.08,
+      clearcoat: 1.0,
       depthWrite: false,
     })
   );
@@ -690,10 +963,12 @@ export function buildCraftMesh(
   root.add(shieldMesh);
 
   const magnetMat = trackMat(
-    new THREE.MeshBasicMaterial({
+    new THREE.MeshStandardMaterial({
       color: 0xfde047,
+      emissive: new THREE.Color(0xfacc15),
+      emissiveIntensity: 2.4,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.78,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
@@ -715,6 +990,11 @@ export function buildCraftMesh(
     underglowMat,
     underglowLight,
     flameGroup,
+    accelFlameGroup,
+    propGroup,
+    wingTrailsGroup,
+    wakeFoamMesh,
+    brakeWaterGlowMesh,
     shieldMesh,
     magnetRing,
     contactShadow,
@@ -723,6 +1003,8 @@ export function buildCraftMesh(
     },
     setUnderglowColor: (hex: string) => {
       underglowMat.color.set(hex);
+      underglowRingMat.color.set(hex);
+      underglowRingMat.emissive.set(hex);
       dashGlowMat.emissive.set(hex);
       if (underglowLight) underglowLight.color.set(hex);
     },
@@ -749,16 +1031,37 @@ export function buildCraftMesh(
         underglowLight.position.y = groundM + 0.42 + hopM * 0.3;
         underglowLight.intensity = p.inTunnel ? 8.2 : 5.8;
       }
-      const beamMat = headlightBeamMesh.material as THREE.MeshBasicMaterial;
-      beamMat.opacity = cfg.isPlayer ? (p.inTunnel ? 0.68 : 0.28) : (p.inTunnel ? 0.42 : 0.22);
 
-      brakeLights.emissiveIntensity = p.braking ? 6.5 : p.drifting ? 4.2 : 1.1;
+      // Dynamic Wake Foam scaling & Brake Water Glow
+      const speedFrac = Math.min(1.4, p.engineVib);
+      const wakeActive = speedFrac > 0.16 && hopM < 0.35;
+      wakeFoamMesh.visible = wakeActive;
+      if (wakeActive) {
+        wakeFoamMesh.position.y = groundM + 0.032;
+        wakeFoamMesh.scale.set(0.55 + speedFrac * 0.85, 1, 0.72 + (p.drifting ? 0.35 : 0));
+        wakeFoamMesh.rotation.y = p.lean * 0.12;
+        wakeMat.opacity = Math.min(0.85, speedFrac * 0.72);
+      }
+
+      brakeLights.emissiveIntensity = p.braking ? 7.2 : p.drifting ? 4.4 : 1.4;
+      brakeWaterGlowMesh.position.y = groundM + 0.048 + hopM * 0.15;
+      brakeWaterGlowMat.opacity = p.braking ? 0.72 : p.drifting ? 0.36 : 0.14;
+
+      // Spinning rear hydro-propeller + motion blur opacity
+      propGroup.rotation.x = p.simTime * (12 + speedFrac * 36);
+      propBlurMat.opacity = Math.min(0.42, 0.12 + speedFrac * 0.26);
+
+      // Wingtip High-Speed Air Contrails
+      const boostOn = p.turboActive || p.nitroActive || p.driftStage > 0;
+      const trailAlpha = boostOn ? 0.58 : Math.max(0, (speedFrac - 0.72) * 0.9);
+      wingTrailsGroup.visible = trailAlpha > 0.02;
+      trailMat.opacity = Math.min(0.65, trailAlpha);
 
       if (duckGroup.visible) {
         for (let i = 0; i < scarfSegments.length; i++) {
           const seg = scarfSegments[i];
-          seg.position.z = Math.sin(p.simTime * 16 + p.idx * 2 + i * 0.9) * (0.07 + i * 0.05);
-          seg.position.y = 0.28 + Math.cos(p.simTime * 13 + i * 0.7) * 0.04;
+          seg.position.z = Math.sin(p.simTime * 17 + p.idx * 2 + i * 0.9) * (0.07 + i * 0.045);
+          seg.position.y = 0.28 + Math.cos(p.simTime * 14 + i * 0.7) * 0.038;
           seg.rotation.y = Math.sin(p.simTime * 15 + i) * 0.25;
         }
       }
@@ -767,16 +1070,28 @@ export function buildCraftMesh(
         b.mesh.position.y = b.basePos[1] + Math.sin(p.simTime * 6.5 + b.phase) * 0.04;
       }
 
-      // Turbo / Nitro / Drift Mini-Turbo exhaust flames
-      const boostOn = p.turboActive || p.nitroActive || p.driftStage > 0;
+      // Turbo/Nitro fiery plume vs normal throttle volumetric blue plasma exhaust
+      const accelActive = !boostOn && !p.braking && (p.accelerating || p.engineVib > 0.35);
+      accelFlameGroup.visible = accelActive;
+      if (accelActive) {
+        const pulse = 0.78 + Math.sin(p.simTime * 42 + p.idx) * 0.24;
+        accelFlameGroup.scale.set((0.65 + speedFrac * 0.55) * pulse, 1, 1);
+      }
+
       flameGroup.visible = boostOn;
       if (boostOn) {
         const flicker = 0.85 + Math.sin(p.simTime * 48 + p.idx) * 0.35;
-        const scaleBase = p.nitroActive ? 1.55 : p.turboActive ? 1.1 : p.driftStage === 2 ? 0.72 : 0.48;
+        const scaleBase = p.nitroActive ? 1.55 : p.turboActive ? 1.12 : p.driftStage === 2 ? 0.74 : 0.5;
         flameGroup.scale.set(scaleBase * flicker, 1, 1);
-        outerFlameMat.color.setHex(
-          p.nitroActive ? 0xe879f9 : p.turboActive ? 0xf97316 : p.driftStage === 2 ? 0xf97316 : 0x38bdf8
-        );
+        const flameColor = p.nitroActive
+          ? 0xe879f9
+          : p.turboActive
+            ? 0xf97316
+            : p.driftStage === 2
+              ? 0xf97316
+              : 0x38bdf8;
+        outerFlameMat.color.setHex(flameColor);
+        outerFlameMat.emissive.setHex(flameColor);
       }
 
       shieldMesh.visible = p.shieldActive;
@@ -794,7 +1109,7 @@ export function buildCraftMesh(
       }
 
       headlightBeamMesh.position.y = groundM + 0.068 + hopM * 0.25;
-      beamMat.opacity = cfg.isPlayer ? (p.inTunnel ? 0.94 : 0.65) : p.inTunnel ? 0.65 : 0.36;
+      beamMat.opacity = cfg.isPlayer ? (p.inTunnel ? 0.78 : 0.34) : p.inTunnel ? 0.48 : 0.22;
     },
     dispose: () => {
       disposables.forEach((d) => d.dispose());
