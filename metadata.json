@@ -1,0 +1,6 @@
+{
+  "name": "Duck Hydro-Race",
+  "description": "Arcade top-down water racing game starring duck pilots across 5 long multi-route circuits with procedural Canvas 2D graphics, Web Audio synthesis, dual touch/keyboard controls, power-ups, and a Patocoins upgrade garage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

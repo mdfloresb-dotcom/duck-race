@@ -1,0 +1,1549 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HydroDuck" />
+  <meta name="theme-color" content="#040b18" />
+  <title>Duck Hydro-Race — Carreras Acuáticas 3D</title>
+  <meta name="description" content="Carreras arcade acuáticas en 3D con cámara baja estilo Need for Speed y vista de capó POV, neón personalizable, 10 potenciadores, 6 circuitos únicos y garaje." />
+  <meta property="og:title" content="Duck Hydro-Race" />
+  <meta property="og:description" content="Carreras arcade acuáticas en 3D con cámara NFS y POV Capó, 6 circuitos únicos, 10 potenciadores e IA ofensiva." />
+  <meta property="og:type" content="website" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <style>
+    :root {
+      --bg-deep: #040b18;
+      --panel-bg: rgba(7, 18, 36, 0.92);
+      --panel-soft: rgba(11, 28, 54, 0.90);
+      --panel-border: rgba(34, 211, 238, 0.36);
+      --gold: #facc15;
+      --gold-dark: #ca8a04;
+      --orange: #f97316;
+      --cyan: #22d3ee;
+      --emerald: #10b981;
+      --red: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #bae6fd;
+      --font-display: ui-rounded, 'SF Pro Rounded', 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --font-mono: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-deep);
+      color: var(--text-main);
+      font-family: var(--font-display);
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+
+    #webglMount {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      z-index: 0;
+    }
+
+    #fxOverlayCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .tabular {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+    }
+
+    /* Overlay Containers */
+    .screen-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      outline: none;
+      color: inherit;
+      transition: transform 0.14s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+
+    button:focus-visible {
+      outline: 3px solid var(--gold);
+      outline-offset: 2px;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* TITLE SCREEN */
+    #titleScreen {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: max(14px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      background: linear-gradient(105deg, rgba(4, 11, 24, 0.90) 0%, rgba(5, 16, 36, 0.70) 48%, rgba(4, 11, 24, 0.22) 100%);
+      pointer-events: auto;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .title-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .coin-counter {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--panel-bg);
+      border: 2px solid rgba(250, 204, 21, 0.55);
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-weight: 800;
+      font-size: 15px;
+      color: #fef08a;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    }
+
+    .title-topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .install-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 44px;
+      padding: 0 14px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #06b6d4 0%, #0284c7 100%);
+      border: 2px solid rgba(186, 230, 253, 0.65);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 800;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+      white-space: nowrap;
+    }
+
+    .install-btn:hover {
+      filter: brightness(1.1);
+    }
+
+    .offline-toast {
+      position: fixed;
+      left: max(14px, env(safe-area-inset-left));
+      bottom: max(14px, env(safe-area-inset-bottom));
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(217, 119, 6, 0.94);
+      border: 1.5px solid #fde68a;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 7px 12px;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--panel-bg);
+      border: 2px solid var(--panel-border);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-main);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+      pointer-events: auto;
+    }
+
+    .icon-btn:hover {
+      background: rgba(14, 42, 74, 0.96);
+      border-color: var(--cyan);
+    }
+
+    .title-main {
+      display: grid;
+      grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+      gap: 24px;
+      align-items: center;
+      margin: auto 0;
+      padding: 10px 0;
+      max-width: 1280px;
+      width: 100%;
+    }
+
+    .title-hero {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .brand-emblem {
+      width: min(100%, 460px);
+      height: auto;
+      display: block;
+      filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.65));
+    }
+
+    .hero-sub {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.5;
+      color: #e0f2fe;
+      max-width: 48ch;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+    }
+
+    .selected-loadout {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+      background: rgba(7, 18, 36, 0.88);
+      border: 1.5px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 10px 14px;
+    }
+
+    .selected-loadout strong {
+      color: #ffffff;
+      font-weight: 800;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .btn-primary {
+      background: #facc15;
+      color: #090d1a;
+      font-weight: 900;
+      font-size: 17px;
+      padding: 14px 28px;
+      border-radius: 14px;
+      border-bottom: 4px solid #b45309;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      white-space: nowrap;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+      min-height: 48px;
+    }
+
+    .btn-primary:hover {
+      background: #fde047;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--panel-soft);
+      color: #f8fafc;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 13px 22px;
+      border-radius: 14px;
+      border: 2px solid var(--panel-border);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+      min-height: 48px;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--cyan);
+      background: rgba(16, 48, 82, 0.94);
+    }
+
+    /* CIRCUIT SELECTOR */
+    .circuit-panel {
+      background: rgba(6, 18, 36, 0.90);
+      border: 2px solid var(--panel-border);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .circuit-panel-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .circuit-panel-head h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: #ffffff;
+    }
+
+    .circuit-panel-head span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .circuit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+    }
+
+    .circuit-card {
+      text-align: left;
+      background: rgba(11, 30, 56, 0.88);
+      border: 2px solid rgba(148, 163, 184, 0.25);
+      border-radius: 13px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 44px;
+    }
+
+    .circuit-card:hover {
+      border-color: rgba(34, 211, 238, 0.78);
+      background: rgba(16, 44, 78, 0.95);
+    }
+
+    .circuit-card.active {
+      border-color: var(--gold);
+      background: rgba(18, 50, 86, 0.96);
+      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.5);
+    }
+
+    .circuit-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .circuit-swatch {
+      width: 26px;
+      height: 18px;
+      border-radius: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      flex-shrink: 0;
+    }
+
+    .circuit-name {
+      font-size: 14px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+
+    .circuit-meta {
+      font-size: 11px;
+      color: #bae6fd;
+      line-height: 1.35;
+    }
+
+    .title-footer-hint {
+      font-size: 12px;
+      color: #cbd5e1;
+      text-align: center;
+      padding-top: 6px;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+      flex-shrink: 0;
+    }
+
+    /* GARAGE MODAL */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 8, 18, 0.86);
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: #07162c;
+      border: 2px solid var(--panel-border);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 920px;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 22px 54px rgba(0, 0, 0, 0.72);
+    }
+
+    .modal-card.compact {
+      max-width: 460px;
+      padding: 24px;
+      gap: 18px;
+      text-align: center;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(34, 211, 238, 0.2);
+      background: rgba(4, 12, 26, 0.85);
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    .garage-body {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 18px;
+      padding: 18px 20px;
+      overflow-y: auto;
+    }
+
+    .vehicle-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .vehicle-item {
+      text-align: left;
+      background: rgba(11, 30, 56, 0.78);
+      border: 2px solid rgba(148, 163, 184, 0.24);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 52px;
+    }
+
+    .vehicle-item.active {
+      border-color: var(--gold);
+      background: rgba(18, 50, 86, 0.96);
+    }
+
+    .vehicle-item-name {
+      font-size: 14px;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .vehicle-item-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .garage-detail {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .garage-preview-box {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgba(4, 14, 28, 0.88);
+      border: 1.5px solid rgba(34, 211, 238, 0.24);
+      border-radius: 14px;
+      padding: 12px 14px;
+    }
+
+    #garagePreviewCanvas {
+      width: 110px;
+      height: 88px;
+      border-radius: 10px;
+      background: #040d1c;
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      flex-shrink: 0;
+    }
+
+    .underglow-picker {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(11, 30, 56, 0.65);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      border-radius: 12px;
+      padding: 9px 12px;
+      flex-wrap: wrap;
+    }
+
+    .underglow-label {
+      font-size: 13px;
+      font-weight: 800;
+      color: #e0f2fe;
+    }
+
+    .underglow-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .underglow-swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      padding: 0;
+    }
+
+    .underglow-swatch.active {
+      border: 3px solid #ffffff;
+      transform: scale(1.1);
+    }
+
+    .stat-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: 125px 1fr auto;
+      align-items: center;
+      gap: 12px;
+      background: rgba(11, 30, 56, 0.6);
+      border: 1px solid rgba(34, 211, 238, 0.16);
+      border-radius: 11px;
+      padding: 8px 12px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #e0f2fe;
+    }
+
+    .stat-pips {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .stat-pip {
+      height: 10px;
+      flex: 1;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .stat-pip.filled {
+      background: var(--cyan);
+    }
+
+    .stat-pip.upgraded {
+      background: var(--gold);
+    }
+
+    .btn-upgrade {
+      background: rgba(250, 204, 21, 0.16);
+      border: 1px solid rgba(250, 204, 21, 0.55);
+      color: #fef08a;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 7px 11px;
+      border-radius: 8px;
+      min-height: 36px;
+      white-space: nowrap;
+    }
+
+    .btn-upgrade:hover:not(:disabled) {
+      background: rgba(250, 204, 21, 0.28);
+    }
+
+    /* ACTIVE RACE HUD */
+    #hudLayer {
+      padding: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    }
+
+    .hud-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .hud-cluster {
+      background: var(--panel-bg);
+      border: 2px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .hud-metric {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .hud-kicker {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .hud-val {
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1.05;
+      color: #ffffff;
+    }
+
+    .hud-val.gold {
+      color: var(--gold);
+    }
+
+    .hud-val.small {
+      font-size: 18px;
+      font-family: var(--font-mono);
+    }
+
+    .hud-right-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .hud-utility-btns {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cam-toggle-btn {
+      width: auto;
+      min-width: 112px;
+      height: 44px;
+      padding: 0 13px;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      border-color: rgba(34, 211, 238, 0.72);
+      background: rgba(8, 28, 56, 0.94);
+    }
+
+    .cam-toggle-btn.cam-pov {
+      border-color: var(--gold);
+      background: rgba(24, 48, 86, 0.96);
+      color: var(--gold);
+      box-shadow: 0 0 14px rgba(250, 204, 21, 0.42), 0 4px 14px rgba(0, 0, 0, 0.45);
+    }
+
+    #minimapCanvas {
+      width: 132px;
+      height: 104px;
+      border-radius: 12px;
+      background: rgba(4, 12, 26, 0.92);
+      border: 2px solid var(--panel-border);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+    }
+
+    /* Bottom-Right NFS Digital Speedometer & Power-Up Slot (Desktop) */
+    .hud-bottom-right {
+      position: fixed;
+      right: max(16px, env(safe-area-inset-right));
+      bottom: max(16px, env(safe-area-inset-bottom));
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .powerup-slot {
+      pointer-events: auto;
+      background: var(--panel-bg);
+      border: 2px solid rgba(148, 163, 184, 0.4);
+      border-radius: 16px;
+      padding: 8px 12px;
+      min-width: 118px;
+      height: 82px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+    }
+
+    .powerup-slot.ready {
+      border-color: var(--gold);
+      background: rgba(20, 44, 80, 0.95);
+    }
+
+    .powerup-name {
+      font-size: 11px;
+      font-weight: 800;
+      color: #ffffff;
+      white-space: nowrap;
+    }
+
+    .powerup-key {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .speedo-card {
+      background: linear-gradient(155deg, rgba(6, 18, 38, 0.95) 0%, rgba(11, 28, 56, 0.92) 100%);
+      border: 2px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    }
+
+    .speedo-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    .speedo-top-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .speedo-gear {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 900;
+      color: #090d1a;
+      background: var(--cyan);
+      border-radius: 5px;
+      padding: 1px 5px;
+      line-height: 1.25;
+    }
+
+    .speedo-drift {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      color: var(--gold);
+    }
+
+    .speedo-num {
+      font-size: 30px;
+      font-weight: 950;
+      line-height: 0.96;
+      color: #ffffff;
+      font-family: var(--font-mono);
+      text-shadow: 0 0 12px rgba(34, 211, 238, 0.45);
+    }
+
+    .speedo-unit {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+    }
+
+    /* Center Announcements */
+    #raceBanner {
+      position: fixed;
+      left: 50%;
+      top: 24%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .banner-big {
+      font-size: clamp(34px, 6.5vw, 64px);
+      font-weight: 950;
+      color: var(--gold);
+      text-shadow: 0 4px 0 #7c2d12, 0 8px 24px rgba(0, 0, 0, 0.8);
+      line-height: 1;
+    }
+
+    .banner-sub {
+      margin-top: 6px;
+      font-size: 15px;
+      font-weight: 800;
+      color: #ffffff;
+      background: rgba(7, 18, 36, 0.9);
+      border: 1px solid rgba(250, 204, 21, 0.55);
+      padding: 6px 14px;
+      border-radius: 10px;
+      display: inline-block;
+    }
+
+    #wrongWayBanner {
+      position: fixed;
+      left: 50%;
+      top: 15%;
+      transform: translateX(-50%);
+      background: rgba(185, 28, 28, 0.94);
+      border: 2px solid #fca5a5;
+      color: #ffffff;
+      font-weight: 900;
+      font-size: 14px;
+      padding: 6px 14px;
+      border-radius: 10px;
+      z-index: 16;
+      pointer-events: none;
+    }
+
+    @keyframes torpedoPulse {
+      0%, 100% {
+        opacity: 1;
+        transform: translateX(-50%) scale(1);
+      }
+      50% {
+        opacity: 0.28;
+        transform: translateX(-50%) scale(0.95);
+      }
+    }
+
+    .torpedo-alert {
+      position: fixed;
+      left: 50%;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      background: rgba(185, 28, 28, 0.94);
+      border: 2.5px solid #fecaca;
+      color: #ffffff;
+      font-weight: 950;
+      font-size: 14px;
+      letter-spacing: 0.05em;
+      padding: 8px 16px;
+      border-radius: 12px;
+      box-shadow: 0 0 22px rgba(239, 68, 68, 0.78);
+      z-index: 17;
+      pointer-events: none;
+      white-space: nowrap;
+      animation: torpedoPulse 0.42s ease-in-out infinite;
+    }
+
+    /* MOBILE TOUCH CONTROLS */
+    #touchControls {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 14;
+    }
+
+    .joystick-zone {
+      position: fixed;
+      left: max(18px, env(safe-area-inset-left));
+      bottom: max(18px, env(safe-area-inset-bottom));
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle at center, rgba(14, 52, 86, 0.62) 0%, rgba(4, 14, 28, 0.78) 100%);
+      border: 2.5px solid rgba(34, 211, 238, 0.58);
+      box-shadow: inset 0 0 18px rgba(34, 211, 238, 0.2), 0 6px 18px rgba(0, 0, 0, 0.5);
+      pointer-events: auto;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .joy-dir {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+      font-weight: 900;
+      color: rgba(186, 230, 253, 0.55);
+      pointer-events: none;
+      transition: color 0.1s ease, transform 0.1s ease;
+    }
+
+    .joy-dir.left { left: 12px; }
+    .joy-dir.right { right: 12px; }
+    .joy-dir.active {
+      color: #facc15;
+      transform: translateY(-50%) scale(1.22);
+    }
+
+    .joystick-knob {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fef08a 0%, #facc15 65%, #ca8a04 100%);
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+      pointer-events: none;
+      transform: translate(0px, 0px);
+    }
+
+    .touch-right-pad {
+      position: fixed;
+      right: max(18px, env(safe-area-inset-right));
+      bottom: max(18px, env(safe-area-inset-bottom));
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .touch-col {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .touch-btn {
+      pointer-events: auto;
+      touch-action: none;
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      background: rgba(7, 18, 36, 0.78);
+      border: 2px solid rgba(34, 211, 238, 0.55);
+      color: #ffffff;
+      font-weight: 900;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    }
+
+    .touch-btn.gas {
+      width: 82px;
+      height: 82px;
+      background: rgba(16, 185, 129, 0.84);
+      border-color: #a7f3d0;
+    }
+
+    .touch-btn.brake {
+      width: 64px;
+      height: 56px;
+      background: rgba(244, 63, 94, 0.8);
+      border-color: #fecdd3;
+    }
+
+    .touch-btn.boost {
+      width: 68px;
+      height: 68px;
+      background: rgba(234, 179, 8, 0.35);
+      border-color: rgba(250, 204, 21, 0.55);
+    }
+
+    .touch-btn.boost.ready {
+      background: rgba(250, 204, 21, 0.94);
+      color: #090d1a;
+      border-color: #ffffff;
+    }
+
+    .touch-btn.pressed {
+      transform: scale(0.92);
+      filter: brightness(1.15);
+    }
+
+    /* RESULTS / PAUSE STATS */
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .result-tile {
+      background: rgba(11, 30, 56, 0.88);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .result-tile-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .result-tile-val {
+      font-size: 20px;
+      font-weight: 900;
+      color: #ffffff;
+    }
+
+    .standings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      text-align: left;
+      max-height: 175px;
+      overflow-y: auto;
+    }
+
+    .standing-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 11px;
+      border-radius: 9px;
+      background: rgba(11, 30, 56, 0.65);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .standing-row.player {
+      background: rgba(250, 204, 21, 0.22);
+      border: 1px solid rgba(250, 204, 21, 0.65);
+      color: #fef08a;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 900px) {
+      .title-main {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+      .garage-body {
+        grid-template-columns: 1fr;
+      }
+      #hudLayer {
+        padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      }
+      .hud-top {
+        gap: 6px;
+        width: 100%;
+      }
+      .hud-kicker {
+        font-size: 8.5px;
+      }
+      .hud-val {
+        font-size: 14px;
+      }
+      .hud-val.small {
+        font-size: 12px;
+      }
+      .hud-cluster {
+        gap: 7px;
+        padding: 5px 8px;
+        min-width: 0;
+      }
+      .hud-right-stack {
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      .hud-utility-btns {
+        gap: 4px;
+      }
+      .hud-utility-btns .icon-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+      }
+      .hud-utility-btns .cam-toggle-btn {
+        width: auto;
+        min-width: 72px;
+        height: 30px;
+        padding: 0 7px;
+        font-size: 10px;
+        gap: 4px;
+      }
+      #minimapCanvas {
+        width: 88px;
+        height: 70px;
+      }
+      .hud-bottom-right {
+        right: auto;
+        left: max(10px, env(safe-area-inset-left));
+        bottom: auto;
+        top: calc(max(8px, env(safe-area-inset-top)) + 48px);
+        gap: 7px;
+      }
+      #raceBanner {
+        top: 34%;
+        width: 88vw;
+      }
+      .torpedo-alert {
+        bottom: max(158px, calc(env(safe-area-inset-bottom) + 148px));
+        font-size: 12px;
+        padding: 6px 12px;
+      }
+      .powerup-slot {
+        min-width: 80px;
+        min-height: 44px;
+        height: auto;
+        padding: 5px 8px;
+      }
+      .powerup-key {
+        display: none;
+      }
+      .speedo-card {
+        padding: 5px 9px;
+      }
+      .speedo-num {
+        font-size: 18px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .selected-loadout span[aria-hidden="true"] {
+        display: none;
+      }
+    }
+
+    @media (max-width: 440px) {
+      .hud-cluster {
+        gap: 5px;
+        padding: 4px 6px;
+      }
+      .hud-val {
+        font-size: 13px;
+      }
+      .hud-val.small {
+        font-size: 11px;
+      }
+      .hud-utility-btns .icon-btn {
+        width: 28px;
+        height: 28px;
+      }
+      .hud-utility-btns .cam-toggle-btn {
+        min-width: 66px;
+        height: 28px;
+        padding: 0 5px;
+        font-size: 9.5px;
+      }
+      #minimapCanvas {
+        width: 78px;
+        height: 62px;
+      }
+      .powerup-slot {
+        min-width: 72px;
+        padding: 5px 7px;
+      }
+      .speedo-card {
+        padding: 5px 8px;
+        gap: 7px;
+      }
+    }
+
+    @media (max-height: 480px) {
+      .brand-emblem {
+        width: 260px;
+      }
+      .hero-sub {
+        display: none;
+      }
+      .joystick-zone {
+        width: 114px;
+        height: 114px;
+      }
+      .touch-btn.gas {
+        width: 72px;
+        height: 72px;
+      }
+      .touch-btn.boost {
+        width: 60px;
+        height: 60px;
+      }
+    }
+  </style>
+</head>
+<body data-state="title">
+  <div id="webglMount"></div>
+  <canvas id="fxOverlayCanvas"></canvas>
+
+  <!-- TITLE SCREEN -->
+  <main id="titleScreen" class="screen-layer" aria-label="Menú principal">
+    <div class="title-topbar">
+      <div class="coin-counter tabular" id="menuCoinsDisplay" aria-label="Patocoins disponibles">
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" fill="#facc15" stroke="#b45309" stroke-width="2" />
+          <path d="M9 14c0-3 2-5 5-5 1.5 0 2.5.8 2.5 2s-1 2-2.5 2h-1.5v2H9z" fill="#92400e" />
+        </svg>
+        <span id="menuCoinsVal">100</span>
+        <span>Patocoins</span>
+      </div>
+
+      <div class="title-topbar-actions">
+        <button id="installAppBtn" class="install-btn hidden" type="button" aria-label="Instalar aplicación PWA">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span id="installAppLabel">Instalar App</span>
+        </button>
+        <button id="menuMuteBtn" class="icon-btn" type="button" aria-label="Silenciar sonido">
+          <svg id="menuMuteIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></svg>
+        </button>
+      </div>
+    </div>
+
+    <section class="title-main">
+      <div class="title-hero">
+        <svg class="brand-emblem" viewBox="0 0 520 150" role="img" aria-label="Duck Hydro-Race">
+          <defs>
+            <linearGradient id="waveGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#22d3ee" />
+              <stop offset="50%" stop-color="#f43f5e" />
+              <stop offset="100%" stop-color="#facc15" />
+            </linearGradient>
+          </defs>
+          <path d="M16 42 Q76 12 132 42 L124 106 Q74 134 24 106 Z" fill="#091d3a" stroke="#facc15" stroke-width="4" />
+          <path d="M40 94 Q20 96 14 82 Q28 84 42 84 Z" fill="#ef4444" />
+          <path d="M40 90 Q18 102 10 92 Q26 94 44 92 Z" fill="#dc2626" />
+          <circle cx="74" cy="70" r="26" fill="#facc15" stroke="#090d1a" stroke-width="3" />
+          <ellipse cx="103" cy="74" rx="15" ry="8" fill="#f97316" stroke="#090d1a" stroke-width="2.5" />
+          <rect x="52" y="54" width="38" height="16" rx="7" fill="#090d1a" />
+          <circle cx="64" cy="62" r="6" fill="#22d3ee" />
+          <circle cx="80" cy="62" r="6" fill="#22d3ee" />
+          <circle cx="62" cy="60" r="2" fill="#ffffff" />
+          <circle cx="78" cy="60" r="2" fill="#ffffff" />
+          <path d="M146 116 Q210 100 280 116 T415 114 T504 116" fill="none" stroke="url(#waveGrad)" stroke-width="6" stroke-linecap="round" />
+          <text x="150" y="64" font-size="44" font-weight="900" fill="#ffffff" stroke="#090d1a" stroke-width="6" paint-order="stroke fill" letter-spacing="1">DUCK</text>
+          <text x="148" y="102" font-size="38" font-weight="900" fill="#facc15" stroke="#090d1a" stroke-width="6" paint-order="stroke fill" letter-spacing="1.5">HYDRO-RACE</text>
+        </svg>
+
+        <p class="hero-sub">
+          Carreras arcade a ras del agua con 6 circuitos radicales, cámara NFS y vista de capó POV, luz neón personalizable y 10 potenciadores de combate.
+        </p>
+
+        <div class="selected-loadout" id="selectedLoadoutSummary">
+          <span>Vehículo: <strong id="hudSelectedVehicle">Moto Acuática</strong></span>
+          <span aria-hidden="true">·</span>
+          <span>Circuito: <strong id="hudSelectedTrack">Laguna Tropical</strong></span>
+        </div>
+
+        <div class="cta-row">
+          <button id="startRaceBtn" class="btn-primary" type="button" data-start="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <polygon points="6,4 20,12 6,20" />
+            </svg>
+            <span>¡A Correr!</span>
+          </button>
+          <button id="openGarageBtn" class="btn-secondary" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+            <span>Garaje y Mejoras</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="circuit-panel" aria-label="Selector de circuito">
+        <div class="circuit-panel-head">
+          <h2>Elegir Circuito (3 Vueltas)</h2>
+          <span>6 escenarios 3D · Rutas alternativas</span>
+        </div>
+        <div class="circuit-grid" id="circuitGrid"></div>
+      </div>
+    </section>
+
+    <div class="title-footer-hint">
+      Flechas / WASD Conducir · Espacio Potenciador · C Cambiar Cámara · P Pausa · R Reiniciar · Táctil iOS/Android
+    </div>
+  </main>
+
+  <!-- GARAGE MODAL -->
+  <div id="garageModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Garaje y Mejoras">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Garaje de Patos Pilotos</h2>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="coin-counter tabular">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" fill="#facc15" stroke="#b45309" stroke-width="2" />
+            </svg>
+            <span id="garageCoinsVal">100</span>
+          </div>
+          <button id="closeGarageBtn" class="icon-btn" type="button" aria-label="Cerrar garaje">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="garage-body">
+        <div class="vehicle-list" id="garageVehicleList"></div>
+
+        <div class="garage-detail">
+          <div class="garage-preview-box">
+            <canvas id="garagePreviewCanvas" width="220" height="176"></canvas>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                <h3 id="garageVehName" style="margin:0;font-size:19px;font-weight:900;">Moto Acuática</h3>
+                <button id="garageActionBtn" class="btn-primary" type="button" style="padding:8px 16px;font-size:13px;min-height:38px;">Equipado</button>
+              </div>
+              <p id="garageVehTagline" style="margin:6px 0 0;font-size:13px;color:#bae6fd;line-height:1.4;"></p>
+            </div>
+          </div>
+
+          <div class="underglow-picker">
+            <span class="underglow-label">Luz Neón Inferior (Underglow)</span>
+            <div id="garageUnderglowRow" class="underglow-row"></div>
+          </div>
+
+          <div class="stat-rows" id="garageStatRows"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE RACE HUD -->
+  <div id="hudLayer" class="screen-layer hidden" aria-label="Interfaz de carrera">
+    <div class="hud-top">
+      <div class="hud-cluster">
+        <div class="hud-metric">
+          <span class="hud-kicker">Posición</span>
+          <span class="hud-val gold tabular" id="hudPosVal">1.º / 6</span>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-kicker">Vuelta</span>
+          <span class="hud-val tabular" id="hudLapVal">1 / 3</span>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-kicker">Tiempo</span>
+          <span class="hud-val small tabular" id="hudTimeVal">00:00.0</span>
+        </div>
+      </div>
+
+      <div class="hud-right-stack">
+        <div class="hud-utility-btns">
+          <button id="hudCameraBtn" class="icon-btn cam-toggle-btn" type="button" tabindex="-1" aria-label="Cambiar Cámara [C]" title="Cámara Baja NFS / Capó POV [C]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <span id="hudCamLabel">CAM: NFS</span>
+          </button>
+          <button id="hudMuteBtn" class="icon-btn" type="button" tabindex="-1" aria-label="Silenciar [M]">
+            <svg id="hudMuteIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></svg>
+          </button>
+          <button id="hudRestartBtn" class="icon-btn" type="button" tabindex="-1" aria-label="Reiniciar [R]">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+          </button>
+          <button id="hudPauseBtn" class="icon-btn" type="button" tabindex="-1" aria-label="Pausa [P]">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" />
+            </svg>
+          </button>
+        </div>
+        <canvas id="minimapCanvas" width="264" height="208" aria-label="Minimapa GPS del circuito"></canvas>
+      </div>
+    </div>
+
+    <div class="hud-bottom-right">
+      <button id="hudPowerupSlot" class="powerup-slot" type="button" tabindex="-1" aria-label="Activar potenciador [Espacio]">
+        <svg id="hudPowerupIcon" width="32" height="32" viewBox="0 0 24 24"></svg>
+        <span class="powerup-name" id="hudPowerupName">Sin Objeto</span>
+        <span class="powerup-key">[Espacio]</span>
+      </button>
+
+      <div class="speedo-card" aria-label="Velocímetro digital">
+        <svg width="58" height="44" viewBox="0 0 58 44" aria-hidden="true">
+          <path d="M6 38 A23 23 0 0 1 52 38" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="3.5" stroke-linecap="round" />
+          <path id="nitroArc" d="M6 38 A23 23 0 0 1 52 38" fill="none" stroke="#f97316" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="72.3" stroke-dashoffset="72.3" />
+          <path d="M12 38 A17 17 0 0 1 46 38" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="5" stroke-linecap="round" />
+          <path id="speedoArc" d="M12 38 A17 17 0 0 1 46 38" fill="none" stroke="#38bdf8" stroke-width="5" stroke-linecap="round" stroke-dasharray="53.4" stroke-dashoffset="53.4" />
+        </svg>
+        <div class="speedo-meta">
+          <div class="speedo-top-row">
+            <span class="speedo-drift" id="hudDriftBadge"></span>
+            <span class="speedo-gear tabular" id="hudGearVal">M1</span>
+          </div>
+          <div class="speedo-num tabular" id="hudSpeedVal">0</div>
+          <div class="speedo-unit">KM/H</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="raceBanner" class="hidden" aria-live="polite">
+    <div class="banner-big" id="bannerBig">3</div>
+    <div class="banner-sub hidden" id="bannerSub"></div>
+  </div>
+
+  <div id="wrongWayBanner" class="hidden">¡SENTIDO CONTRARIO!</div>
+  <div id="torpedoAlert" class="torpedo-alert hidden" aria-live="assertive">▲ ¡TORPEDO ENTRANDO! ▲</div>
+
+  <!-- MOBILE TOUCH CONTROLS -->
+  <div id="touchControls" class="hidden" aria-label="Controles táctiles">
+    <div class="joystick-zone" id="joystickZone" aria-label="Timón izquierdo y derecho">
+      <span class="joy-dir left" id="joyDirLeft" aria-hidden="true">◀</span>
+      <span class="joy-dir right" id="joyDirRight" aria-hidden="true">▶</span>
+      <div class="joystick-knob" id="joystickKnob"></div>
+    </div>
+    <div class="touch-right-pad">
+      <button class="touch-btn boost" id="touchBoostBtn" type="button" tabindex="-1" aria-label="Activar potenciador">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </svg>
+        <span>TURBO</span>
+      </button>
+      <div class="touch-col">
+        <button class="touch-btn gas" id="touchGasBtn" type="button" tabindex="-1" aria-label="Acelerar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <polygon points="12 4 4 18 20 18" />
+          </svg>
+          <span>ACELERAR</span>
+        </button>
+        <button class="touch-btn brake" id="touchBrakeBtn" type="button" tabindex="-1" aria-label="Frenar">
+          <span>FRENO</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAUSE MODAL -->
+  <div id="pauseModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Juego en pausa">
+    <div class="modal-card compact">
+      <h2 style="margin:0;font-size:26px;font-weight:900;">Carrera en Pausa</h2>
+      <p id="pauseTrackLabel" style="margin:0;color:#bae6fd;font-size:14px;"></p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button id="resumeBtn" class="btn-primary" type="button">Reanudar</button>
+        <button id="pauseRestartBtn" class="btn-secondary" type="button">Reiniciar Carrera</button>
+        <button id="pauseMenuBtn" class="btn-secondary" type="button">Menú Principal</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINISH / RESULTS MODAL -->
+  <div id="resultsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Resultados de carrera">
+    <div class="modal-card compact" style="max-width:520px;">
+      <div id="resultsHeadline" style="font-size:28px;font-weight:950;color:#facc15;">¡1.º Lugar — Podio de Oro!</div>
+      <div class="results-grid">
+        <div class="result-tile">
+          <span class="result-tile-label">Tiempo Total</span>
+          <span class="result-tile-val tabular" id="resTotalTime">00:00.0</span>
+        </div>
+        <div class="result-tile">
+          <span class="result-tile-label">Mejor Vuelta</span>
+          <span class="result-tile-val tabular" id="resBestLap">00:00.0</span>
+        </div>
+        <div class="result-tile">
+          <span class="result-tile-label">Patocoins</span>
+          <span class="result-tile-val tabular" id="resCoinsEarned" style="color:#facc15;">+240</span>
+        </div>
+      </div>
+
+      <div class="standings-list" id="resStandings"></div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+        <button id="playAgainBtn" class="btn-primary" type="button" data-start="true">Correr de Nuevo</button>
+        <button id="resGarageBtn" class="btn-secondary" type="button">Garaje</button>
+        <button id="resMenuBtn" class="btn-secondary" type="button">Menú</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- iOS SAFARI INSTALL GUIDE MODAL -->
+  <div id="iosInstallModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Instalar en iPhone o iPad">
+    <div class="modal-card compact" style="max-width:420px;text-align:left;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <h2 style="margin:0;font-size:20px;font-weight:900;color:#facc15;">Instalar en iPhone / iPad</h2>
+        <button id="closeIosInstallBtn" class="icon-btn" type="button" aria-label="Cerrar guía iOS" style="width:36px;height:36px;">✕</button>
+      </div>
+      <p style="margin:0;font-size:14px;line-height:1.55;color:#e0f2fe;">
+        Juega a pantalla completa sin barras de Safari y sin conexión:
+      </p>
+      <ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.65;color:#ffffff;display:flex;flex-direction:column;gap:8px;">
+        <li>Toca el botón <strong>Compartir</strong> (cuadro con flecha hacia arriba) en la barra de Safari.</li>
+        <li>Desliza hacia abajo y selecciona <strong>Agregar a pantalla de inicio</strong>.</li>
+        <li>Toca <strong>Agregar</strong> y abre <strong>HydroDuck</strong> desde tu pantalla de inicio.</li>
+      </ol>
+      <button id="okIosInstallBtn" class="btn-primary" type="button" style="width:100%;">¡Entendido!</button>
+    </div>
+  </div>
+
+  <!-- OFFLINE INDICATOR -->
+  <div id="offlineBanner" class="offline-toast hidden" role="status">
+    <span style="width:8px;height:8px;border-radius:50%;background:#ffffff;display:inline-block;"></span>
+    <span>Modo Sin Conexión — Caché local activa</span>
+  </div>
+
+  <script type="module" src="/src/game/main.ts"></script>
+</body>
+</html>
