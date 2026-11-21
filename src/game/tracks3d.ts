@@ -193,14 +193,35 @@ export function buildCompiledTrack(def: TrackDef): CompiledTrack {
   }
 
   for (const lane of allLanes) {
+    // Spawn one launch ramp at the midpoint of each contiguous 'ramp' surface run
+    let runStart = -1;
+    for (let i = 6; i < lane.length - 4; i++) {
+      const pt = lane[i];
+      if (pt.surface === 'ramp') {
+        if (runStart < 0) runStart = i;
+      } else if (runStart >= 0) {
+        const midIdx = Math.floor((runStart + i - 1) * 0.5);
+        const rpt = lane[midIdx];
+        ramps.push({ x: rpt.x, y: rpt.y, z: rpt.z, tx: rpt.tx, ty: rpt.ty, w: rpt.halfWidth * 0.85 });
+        runStart = -1;
+      }
+    }
+    if (runStart >= 0) {
+      const midIdx = Math.floor((runStart + lane.length - 5) * 0.5);
+      const rpt = lane[midIdx];
+      ramps.push({ x: rpt.x, y: rpt.y, z: rpt.z, tx: rpt.tx, ty: rpt.ty, w: rpt.halfWidth * 0.85 });
+    }
+
     for (let i = 10; i < lane.length - 6; i++) {
       const pt = lane[i];
 
-      if (pt.surface === 'ramp' && i % 10 === 0) {
-        ramps.push({ x: pt.x, y: pt.y, z: pt.z, tx: pt.tx, ty: pt.ty, w: pt.halfWidth * 0.85 });
-      }
-
-      if (def.biome === 'city' && lane === main && (i === 36 || i === 98 || i === 146) && pt.z < 5) {
+      if (
+        def.biome === 'city' &&
+        lane === main &&
+        (i === 52 || i === 116 || i === 210) &&
+        pt.z < 5 &&
+        Math.hypot(pt.x, pt.y) > 460
+      ) {
         bridgesOver.push({
           x: pt.x,
           y: pt.y,
@@ -215,7 +236,7 @@ export function buildCompiledTrack(def: TrackDef): CompiledTrack {
           laneIdx: i,
           offset: 0,
           speed: 1.5 + rand() * 0.5,
-          color: i === 98 ? '#38bdf8' : '#f43f5e',
+          color: i === 116 ? '#38bdf8' : '#f43f5e',
           crossing: true,
           crossX: pt.x,
           crossY: pt.y,
@@ -393,14 +414,14 @@ export function buildCompiledTrack(def: TrackDef): CompiledTrack {
     }
   }
 
-  if (def.biome === 'lagoon' || def.biome === 'pirate') {
-    const rpt = main[25];
+  if (def.biome === 'lagoon') {
+    const rpt = main[28];
     ramps.push({ x: rpt.x, y: rpt.y, z: rpt.z, tx: rpt.tx, ty: rpt.ty, w: 120 });
   }
 
   const coins: CoinItem[] = generateTrackCoins(main, branches).map((c) => ({
     ...c,
-    z: findFlatSampleZ(allLanes, c.x, c.y),
+    z: c.z ?? findFlatSampleZ(allLanes, c.x, c.y),
     respawn: 0,
   }));
 
@@ -424,16 +445,17 @@ export function buildCompiledTrack(def: TrackDef): CompiledTrack {
 export const COMPILED_TRACKS: CompiledTrack[] = TRACK_DEFS.map(buildCompiledTrack);
 
 /**
- * Height-aware nearest track sample lookup.
- * When `currentZ` is supplied, prevents racers on an elevated overpass (z ~ 130)
- * from cross-snapping onto lower water branches underneath (z = 0).
+ * Height- and progress-aware nearest track sample lookup.
+ * When `currentZ` / `lastS` are supplied, prevents racers on an elevated overpass (z ~ 145)
+ * from cross-snapping onto the lower perpendicular water canal (z = 0) at Figure-8 crossings.
  */
 export function findNearestSample(
   track: CompiledTrack,
   x: number,
   y: number,
   preferredLaneId: string | null = null,
-  currentZ?: number
+  currentZ?: number,
+  lastS?: number
 ): { sample: TrackSample; idx: number; arr: TrackSample[]; dist: number } {
   let best: { sample: TrackSample; idx: number; arr: TrackSample[]; dist: number } | null = null;
   let bestDistSq = Infinity;
@@ -443,8 +465,16 @@ export function findNearestSample(
       const pt = arr[i];
       const dx = x - pt.x;
       const dy = y - pt.y;
-      const dzPenalty = currentZ !== undefined ? Math.pow(pt.z - currentZ, 2) * 0.45 : 0;
-      const d2 = (dx * dx + dy * dy + dzPenalty) * bias;
+      const dzPenalty = currentZ !== undefined ? Math.pow(pt.z - currentZ, 2) * 1.25 : 0;
+      let sPenalty = 0;
+      if (lastS !== undefined) {
+        const ds = Math.abs(pt.s - lastS);
+        const circDs = Math.min(ds, 1 - ds);
+        if (circDs > 0.22) {
+          sPenalty = circDs * circDs * 3200000;
+        }
+      }
+      const d2 = (dx * dx + dy * dy + dzPenalty + sPenalty) * bias;
       if (d2 < bestDistSq) {
         bestDistSq = d2;
         best = { sample: pt, idx: i, arr, dist: Math.hypot(dx, dy) };
@@ -732,7 +762,7 @@ export function buildTrackScene(
     group.add(new THREE.Mesh(underDeckGeo, viaductUnderMat));
   }
 
-  // Viaduct Support Columns
+  // Viaduct Support Columns (kept clear of both branch canals and crossing Figure-8 main canals)
   const pillarCoords: { x: number; y: number; z: number }[] = [];
   for (let i = 0; i < track.main.length; i += 4) {
     const pt = track.main[i];
@@ -740,17 +770,26 @@ export function buildTrackScene(
     for (const side of [-1, 1]) {
       const px = pt.x + pt.nx * side * (pt.halfWidth + 14);
       const py = pt.y + pt.ny * side * (pt.halfWidth + 14);
-      let hitsLowerBranch = false;
-      for (const br of track.branches) {
-        for (let k = 0; k < br.samples.length; k += 2) {
-          if (Math.hypot(px - br.samples[k].x, py - br.samples[k].y) < br.samples[k].halfWidth + 12) {
-            hitsLowerBranch = true;
-            break;
-          }
+      let hitsLowerCanal = false;
+      for (let k = 0; k < track.main.length; k += 2) {
+        const mPt = track.main[k];
+        if (mPt.z < 20 && Math.hypot(px - mPt.x, py - mPt.y) < mPt.halfWidth + 24) {
+          hitsLowerCanal = true;
+          break;
         }
-        if (hitsLowerBranch) break;
       }
-      if (!hitsLowerBranch) {
+      if (!hitsLowerCanal) {
+        for (const br of track.branches) {
+          for (let k = 0; k < br.samples.length; k += 2) {
+            if (Math.hypot(px - br.samples[k].x, py - br.samples[k].y) < br.samples[k].halfWidth + 14) {
+              hitsLowerCanal = true;
+              break;
+            }
+          }
+          if (hitsLowerCanal) break;
+        }
+      }
+      if (!hitsLowerCanal) {
         pillarCoords.push({ x: px * WORLD_SCALE, y: pt.z * WORLD_SCALE, z: py * WORLD_SCALE });
       }
     }
@@ -1100,6 +1139,13 @@ export function buildTrackScene(
     const idx = Math.floor((sec / 8) * track.main.length);
     const pt = track.main[idx];
     if (pt.tunnel) continue; // Tunnel ribs replace checkpoint arches inside tunnels
+    // Skip arch if directly beneath an elevated Figure-8 overpass so posts never clip deck
+    const underOverpass =
+      pt.z < 20 &&
+      track.main.some(
+        (other) => other.z > 65 && Math.hypot(other.x - pt.x, other.y - pt.y) < 280
+      );
+    if (underOverpass) continue;
     const span = pt.halfWidth * 2 * WORLD_SCALE + 0.8;
     const archGroup = new THREE.Group();
     archGroup.position.set(pt.x * WORLD_SCALE, pt.z * WORLD_SCALE, pt.y * WORLD_SCALE);

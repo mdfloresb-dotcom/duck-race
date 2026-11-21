@@ -14,6 +14,7 @@ import {
   getEffectiveVehicleStats,
   getUpgradeCost,
   normalizeAngle,
+  resolveVehicleCollision,
   stepCraftPhysics,
   updateCheckpointProgress,
   type CameraMode,
@@ -355,6 +356,7 @@ function main(): void {
   let lastCountdownNum = 4;
   let bannerTimer = 0;
   let screenShake = 0;
+  let hullSoundCooldown = 0;
   let lightningFlash = 0;
   let boostKick = 0;
   let landingCompress = 0;
@@ -1295,6 +1297,7 @@ function main(): void {
   function stepSimulation(dt: number): void {
     simTime += dt;
     screenShake = Math.max(0, screenShake - dt * 1.9);
+    hullSoundCooldown = Math.max(0, hullSoundCooldown - dt);
     lightningFlash = Math.max(0, lightningFlash - dt * 2.8);
     boostKick = Math.max(0, boostKick - dt * 2.6);
     landingCompress = Math.max(0, landingCompress - dt * 3.4);
@@ -1317,7 +1320,7 @@ function main(): void {
     // Attract mode autopilot on Title screen
     if (gameState === 'title') {
       racers.forEach((r) => {
-        const nearest = findNearestSample(currentTrack, r.x, r.y, r.laneId, r.groundZ);
+        const nearest = findNearestSample(currentTrack, r.x, r.y, r.laneId, r.groundZ, r.cp.lastS);
         const target = nearest.arr[(nearest.idx + 5) % nearest.arr.length];
         const desiredAngle = Math.atan2(target.y - r.y, target.x - r.x);
         const diff = normalizeAngle(desiredAngle - r.angle);
@@ -1347,12 +1350,18 @@ function main(): void {
         r.x += r.vx * dt;
         r.y += r.vy * dt;
         r.lean += (steer - r.lean) * (1 - Math.exp(-8 * dt));
-        const post = findNearestSample(currentTrack, r.x, r.y, r.laneId, r.groundZ);
+        const post = findNearestSample(currentTrack, r.x, r.y, r.laneId, r.groundZ, r.cp.lastS);
+        r.cp.lastS = post.sample.s;
         r.groundZ = post.sample.z;
         r.groundSlope = post.sample.slope;
         r.airZ = post.sample.z;
         r.inTunnel = post.sample.tunnel !== null;
       });
+      for (let i = 0; i < racers.length; i++) {
+        for (let j = i + 1; j < racers.length; j++) {
+          resolveVehicleCollision(racers[i], racers[j]);
+        }
+      }
       return;
     }
 
@@ -1463,7 +1472,7 @@ function main(): void {
         r.spinVisual *= Math.exp(-10 * dt);
       }
 
-      const nearest = findNearestSample(currentTrack, r.x, r.y, r.laneId, r.groundZ);
+      const nearest = findNearestSample(currentTrack, r.x, r.y, r.laneId, r.groundZ, r.cp.lastS);
       r.laneId = nearest.sample.laneId;
       const waveOffset = computeWaveHeight(
         r.x,
@@ -1540,7 +1549,12 @@ function main(): void {
             }
           }
 
-          let targetSample = nearest.arr[(nearest.idx + 4) % nearest.arr.length];
+          let targetSample =
+            nearest.sample.laneId !== 'main' && nearest.idx + 4 >= nearest.arr.length
+              ? currentTrack.main[
+                  (Math.floor(nearest.sample.s * currentTrack.main.length) + 4) % currentTrack.main.length
+                ]
+              : nearest.arr[(nearest.idx + 4) % nearest.arr.length];
           for (const br of currentTrack.branches) {
             if (r.aiPrefLane === br.id && Math.abs(nearest.sample.s - br.forkS) < 0.06) {
               targetSample = br.samples[Math.min(br.samples.length - 1, 3)];
@@ -1679,7 +1693,7 @@ function main(): void {
       }
 
       // Height-aware Track Boundary Banking
-      const postNear = findNearestSample(currentTrack, r.x, r.y, r.laneId, r.groundZ);
+      const postNear = findNearestSample(currentTrack, r.x, r.y, r.laneId, r.groundZ, r.cp.lastS);
       const postWave = computeWaveHeight(
         r.x,
         r.y,
@@ -1942,41 +1956,74 @@ function main(): void {
       }
     }
 
-    // Racer-to-Racer Collisions & Close-Pass Water Splashes
-    for (let i = 0; i < racers.length; i++) {
-      for (let j = i + 1; j < racers.length; j++) {
-        const a = racers[i];
-        const b = racers[j];
-        if (Math.abs(a.airZ - b.airZ) > 22) continue;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.hypot(dx, dy);
-        if ((a.isPlayer || b.isPlayer) && dist < 88 && (a.speed > 260 || b.speed > 260)) {
-          waterSplashIntensity = Math.max(waterSplashIntensity, 0.45);
-        }
-        const minDist = 42;
-        if (dist < minDist && dist > 0.01) {
-          const nx = dx / dist;
-          const ny = dy / dist;
-          const overlap = (minDist - dist) * 0.5;
-          a.x -= nx * overlap;
-          a.y -= ny * overlap;
-          b.x += nx * overlap;
-          b.y += ny * overlap;
+    // Solid Oriented-Capsule Racer-to-Racer Collisions & Close-Pass Water Splashes
+    for (let iter = 0; iter < 2; iter++) {
+      for (let i = 0; i < racers.length; i++) {
+        for (let j = i + 1; j < racers.length; j++) {
+          const a = racers[i];
+          const b = racers[j];
+          if (iter === 0 && (a.isPlayer || b.isPlayer) && Math.abs(a.airZ - b.airZ) <= 36) {
+            const closeDist = Math.hypot(b.x - a.x, b.y - a.y);
+            if (closeDist < 88 && (a.speed > 260 || b.speed > 260)) {
+              waterSplashIntensity = Math.max(waterSplashIntensity, 0.45);
+            }
+          }
 
-          const relVx = b.vx - a.vx;
-          const relVy = b.vy - a.vy;
-          const sepVel = relVx * nx + relVy * ny;
-          if (sepVel < 0) {
-            const imp = -sepVel * 0.68;
-            a.vx -= nx * imp;
-            a.vy -= ny * imp;
-            b.vx += nx * imp;
-            b.vy += ny * imp;
+          const colRes = resolveVehicleCollision(a, b);
+          if (!colRes.collided) continue;
+
+          a.speed = Math.hypot(a.vx, a.vy);
+          b.speed = Math.hypot(b.vx, b.vy);
+
+          // Re-clamp pushed hulls cleanly inside canal walls
+          for (const pushed of [a, b]) {
+            const wallNear = findNearestSample(
+              currentTrack,
+              pushed.x,
+              pushed.y,
+              pushed.laneId,
+              pushed.groundZ,
+              pushed.cp.lastS
+            );
+            const wx = pushed.x - wallNear.sample.x;
+            const wy = pushed.y - wallNear.sample.y;
+            const wd = Math.hypot(wx, wy);
+            const wMax = wallNear.sample.halfWidth - 18;
+            if (wd > wMax && wd > 0.01) {
+              pushed.x = wallNear.sample.x + (wx / wd) * wMax;
+              pushed.y = wallNear.sample.y + (wy / wd) * wMax;
+            }
+          }
+
+          if (iter === 0) {
+            const sparkCount = colRes.shieldKnock ? 12 : 8;
+            for (let k = 0; k < sparkCount; k++) {
+              const ang = Math.random() * Math.PI * 2;
+              const spd = 85 + Math.random() * 145;
+              const isWaterSpray = k % 3 === 0;
+              spawnParticle(
+                colRes.impactX,
+                colRes.impactY,
+                colRes.impactZ,
+                Math.cos(ang) * spd,
+                Math.sin(ang) * spd,
+                2.5 + Math.random() * 2.5,
+                isWaterSpray ? 2.6 : 1.7,
+                0.28 + Math.random() * 0.16,
+                isWaterSpray ? 0xbae6fd : colRes.shieldKnock ? 0x22d3ee : 0xfb923c
+              );
+            }
+
             if (a.isPlayer || b.isPlayer) {
-              sound.playBump();
-              screenShake = Math.max(screenShake, 0.25);
+              screenShake = Math.max(screenShake, Math.min(0.65, 0.24 * colRes.impactStrength));
               waterSplashIntensity = Math.max(waterSplashIntensity, 0.85);
+              if (hullSoundCooldown <= 0) {
+                sound.playHullImpact(colRes.impactStrength);
+                hullSoundCooldown = 0.14;
+                if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                  navigator.vibrate(25);
+                }
+              }
             }
           }
         }

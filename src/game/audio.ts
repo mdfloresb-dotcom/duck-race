@@ -272,6 +272,13 @@ export class SoundEngine {
     this.playSplash(false);
   }
 
+  public playHullImpact(intensity = 1): void {
+    const scale = Math.max(0.45, Math.min(1.5, intensity));
+    this.tone(112, 0.14, 'triangle', 0.24 * scale, 42);
+    this.noiseBurst(0.11, 1450, 0.15 * scale);
+    this.noiseBurst(0.16, 720, 0.12 * scale);
+  }
+
   public playJump(): void {
     this.tone(240, 0.22, 'sine', 0.2, 540);
   }

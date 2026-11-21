@@ -1,3 +1,5 @@
+import { CatmullRomCurve3, Vector3 } from 'three';
+
 export type SurfaceType =
   | 'water'
   | 'boost_current'
@@ -227,6 +229,7 @@ export interface CheckpointState {
 export interface TrackCoinSpawn {
   x: number;
   y: number;
+  z: number;
   phase: number;
 }
 
@@ -305,7 +308,7 @@ export const TRACK_DEFS: TrackDef[] = [
   {
     id: 'lagoon',
     name: 'Laguna Tropical',
-    subtitle: 'Costa soleada · Puentes colgantes y túnel con mantarrayas',
+    subtitle: 'Circuito técnico costero · Doble chicane en arrecife y recta de playa',
     biome: 'lagoon',
     swatch: 'linear-gradient(135deg, #0ea5e9 0%, #facc15 100%)',
     skyTop: '#0369a1',
@@ -317,49 +320,51 @@ export const TRACK_DEFS: TrackDef[] = [
     neonSecondary: '#facc15',
     bankColor: '#d97706',
     points: [
-      { x: -450, y: -1580, w: 400, z: 0 },
-      { x: 650, y: -1620, w: 390, z: 0 },
-      { x: 1750, y: -1450, w: 380, z: 0 },
-      { x: 2550, y: -800, w: 370, z: 48, surface: 'bridge' },
-      { x: 2680, y: 250, w: 360, z: 135, surface: 'bridge' },
-      { x: 2050, y: 1220, w: 380, z: 42, surface: 'boost_current' },
-      { x: 1120, y: 1680, w: 410, z: 0 },
-      { x: 120, y: 1480, w: 380, z: 0 },
-      { x: -750, y: 1760, w: 390, z: 0 },
-      { x: -1820, y: 1480, w: 370, z: 0, tunnel: 'glass_ocean' },
-      { x: -2620, y: 740, w: 360, z: 0, tunnel: 'glass_ocean' },
-      { x: -2480, y: -320, w: 370, z: 0, surface: 'boost_current', tunnel: 'glass_ocean' },
-      { x: -1920, y: -1200, w: 380, z: 0 },
-      { x: -1220, y: -1560, w: 400, z: 0 },
+      { x: -420, y: -1800, w: 390, z: 0 },
+      { x: 480, y: -1800, w: 390, z: 0 },
+      { x: 1320, y: -1780, w: 380, z: 0, surface: 'boost_current' },
+      { x: 2180, y: -1460, w: 375, z: 0 },
+      { x: 2660, y: -680, w: 365, z: 46, surface: 'bridge' },
+      { x: 2540, y: 260, w: 360, z: 132, surface: 'bridge' },
+      { x: 1960, y: 1020, w: 370, z: 44, surface: 'boost_current' },
+      { x: 1180, y: 1580, w: 360, z: 0 },
+      { x: 420, y: 1100, w: 350, z: 0 },
+      { x: -240, y: 1840, w: 350, z: 0 },
+      { x: -940, y: 1260, w: 350, z: 0 },
+      { x: -1820, y: 1540, w: 365, z: 0, tunnel: 'glass_ocean' },
+      { x: -2560, y: 820, w: 360, z: 0, tunnel: 'glass_ocean' },
+      { x: -2580, y: -260, w: 365, z: 0, surface: 'boost_current', tunnel: 'glass_ocean' },
+      { x: -2160, y: -1260, w: 380, z: 0 },
+      { x: -1350, y: -1780, w: 390, z: 0 },
     ],
     branches: [
       {
         id: 'coral_cut',
         label: 'Atajo Arrecife Turbo',
         forkIdx: 2,
-        mergeIdx: 6,
+        mergeIdx: 7,
         points: [
-          { x: 1850, y: -420, w: 290, z: 0, surface: 'ramp' },
-          { x: 2150, y: 320, w: 290, z: 0, surface: 'boost_current' },
-          { x: 1650, y: 1100, w: 290, z: 0, surface: 'ramp' },
+          { x: 1780, y: -920, w: 280, z: 0, surface: 'ramp' },
+          { x: 1820, y: 140, w: 280, z: 0, surface: 'boost_current' },
+          { x: 1440, y: 940, w: 280, z: 0, surface: 'ramp' },
         ],
       },
       {
         id: 'palm_bay',
         label: 'Bahía de Arena',
-        forkIdx: 8,
-        mergeIdx: 12,
+        forkIdx: 10,
+        mergeIdx: 14,
         points: [
-          { x: -1450, y: 920, w: 295, z: 0, surface: 'boost_current' },
-          { x: -1650, y: -180, w: 295, z: 0, surface: 'ramp' },
+          { x: -1560, y: 720, w: 285, z: 0, surface: 'boost_current' },
+          { x: -1740, y: -320, w: 285, z: 0, surface: 'ramp' },
         ],
       },
     ],
   },
   {
     id: 'city',
-    name: 'Canales de la Ciudad',
-    subtitle: 'Metrópoli neón · Curvas 90°, puentes metálicos y patrullas',
+    name: 'Canales Neón de la Ciudad',
+    subtitle: 'Circuito en "8" con paso a desnivel · Curvas 90° y rectas neón',
     biome: 'city',
     swatch: 'linear-gradient(135deg, #1e1b4b 0%, #f43f5e 100%)',
     skyTop: '#040614',
@@ -371,41 +376,44 @@ export const TRACK_DEFS: TrackDef[] = [
     neonSecondary: '#22d3ee',
     bankColor: '#1e293b',
     points: [
-      { x: -750, y: -1650, w: 270, z: 0 },
-      { x: 850, y: -1650, w: 260, z: 0 },
-      { x: 2250, y: -1650, w: 255, z: 0 },
-      { x: 2450, y: -1350, w: 255, z: 0, tunnel: 'neon_industrial' },
-      { x: 2450, y: -100, w: 260, z: 0, tunnel: 'neon_industrial' },
-      { x: 2450, y: 1250, w: 255, z: 0 },
-      { x: 2150, y: 1550, w: 265, z: 0, surface: 'boost_current' },
-      { x: 850, y: 1550, w: 260, z: 0 },
-      { x: 550, y: 850, w: 255, z: 0 },
-      { x: -650, y: 850, w: 255, z: 0 },
-      { x: -950, y: 1600, w: 265, z: 0 },
-      { x: -2250, y: 1600, w: 260, z: 45, surface: 'bridge' },
-      { x: -2550, y: 1250, w: 260, z: 130, surface: 'bridge' },
-      { x: -2550, y: -1050, w: 260, z: 50, surface: 'bridge' },
-      { x: -2250, y: -1600, w: 270, z: 0 },
+      { x: -750, y: 0, w: 275, z: 0 },
+      { x: 0, y: 0, w: 275, z: 0 },
+      { x: 900, y: 0, w: 270, z: 0, surface: 'boost_current' },
+      { x: 1920, y: 0, w: 265, z: 0 },
+      { x: 2300, y: -280, w: 255, z: 0 },
+      { x: 2300, y: -1340, w: 260, z: 0, tunnel: 'neon_industrial' },
+      { x: 2000, y: -1720, w: 260, z: 0, tunnel: 'neon_industrial' },
+      { x: 760, y: -1720, w: 265, z: 0, surface: 'boost_current' },
+      { x: 120, y: -1620, w: 260, z: 0 },
+      { x: 0, y: -950, w: 265, z: 58, surface: 'bridge' },
+      { x: 0, y: 0, w: 270, z: 145, surface: 'bridge' },
+      { x: 0, y: 950, w: 265, z: 58, surface: 'bridge' },
+      { x: -140, y: 1640, w: 260, z: 0 },
+      { x: -1240, y: 1640, w: 265, z: 0, surface: 'boost_current' },
+      { x: -2200, y: 1600, w: 260, z: 0 },
+      { x: -2350, y: 900, w: 260, z: 0 },
+      { x: -2350, y: 180, w: 265, z: 0 },
+      { x: -1600, y: 0, w: 275, z: 0 },
     ],
     branches: [
       {
         id: 'neon_alley',
         label: 'Callejón Neón',
-        forkIdx: 2,
-        mergeIdx: 6,
+        forkIdx: 3,
+        mergeIdx: 7,
         points: [
-          { x: 1750, y: -650, w: 245, z: 0, surface: 'boost_current' },
-          { x: 1750, y: 650, w: 245, z: 0, surface: 'boost_current' },
+          { x: 1960, y: -740, w: 240, z: 0, surface: 'boost_current' },
+          { x: 1420, y: -1260, w: 240, z: 0, surface: 'boost_current' },
         ],
       },
       {
         id: 'grand_dock',
         label: 'Dársena Central',
-        forkIdx: 10,
-        mergeIdx: 14,
+        forkIdx: 13,
+        mergeIdx: 16,
         points: [
-          { x: -1800, y: 820, w: 250, z: 0, surface: 'water' },
-          { x: -1850, y: -550, w: 250, z: 0, surface: 'boost_current' },
+          { x: -1480, y: 1200, w: 245, z: 0, surface: 'water' },
+          { x: -1860, y: 620, w: 245, z: 0, surface: 'boost_current' },
         ],
       },
     ],
@@ -413,7 +421,7 @@ export const TRACK_DEFS: TrackDef[] = [
   {
     id: 'arctic',
     name: 'Bahía Ártica',
-    subtitle: 'Glaciar extremo · Bloques rompibles, curvas en hielo y ventisca',
+    subtitle: 'Serpentina y horquillas 180° · Slalom glaciar de puro drift',
     biome: 'arctic',
     swatch: 'linear-gradient(135deg, #064e3b 0%, #7dd3fc 100%)',
     skyTop: '#061830',
@@ -425,39 +433,44 @@ export const TRACK_DEFS: TrackDef[] = [
     neonSecondary: '#34d399',
     bankColor: '#e2e8f0',
     points: [
-      { x: -500, y: -1680, w: 345, z: 0, surface: 'ice_water' },
-      { x: 800, y: -1680, w: 340, z: 0, surface: 'boost_current' },
-      { x: 2050, y: -1350, w: 335, z: 45, surface: 'bridge' },
-      { x: 2720, y: -420, w: 330, z: 125, surface: 'bridge' },
-      { x: 2420, y: 780, w: 350, z: 32, surface: 'boost_current' },
-      { x: 1550, y: 1620, w: 340, z: 0, surface: 'ice_water' },
-      { x: 450, y: 1760, w: 345, z: 0, surface: 'ice_water' },
-      { x: -650, y: 1320, w: 330, z: 0, surface: 'ice_water' },
-      { x: -1750, y: 1720, w: 335, z: 0, surface: 'boost_current', tunnel: 'ice_cavern' },
-      { x: -2650, y: 900, w: 330, z: 0, surface: 'ice_water', tunnel: 'ice_cavern' },
-      { x: -2720, y: -320, w: 335, z: 0, surface: 'ice_water', tunnel: 'ice_cavern' },
-      { x: -2020, y: -1280, w: 330, z: 0, surface: 'boost_current' },
-      { x: -1250, y: -1660, w: 345, z: 0, surface: 'ice_water' },
+      { x: -450, y: -1700, w: 340, z: 0, surface: 'ice_water' },
+      { x: 450, y: -1700, w: 340, z: 0, surface: 'boost_current' },
+      { x: 1460, y: -1700, w: 335, z: 0, surface: 'ice_water' },
+      { x: 2440, y: -1650, w: 340, z: 0, surface: 'ice_water' },
+      { x: 2780, y: -1120, w: 350, z: 0, surface: 'ice_water' },
+      { x: 2240, y: -680, w: 340, z: 0, surface: 'boost_current' },
+      { x: 1280, y: -780, w: 325, z: 0, surface: 'ice_water' },
+      { x: 650, y: -120, w: 320, z: 0, surface: 'ice_water' },
+      { x: 1420, y: 520, w: 320, z: 45, surface: 'bridge' },
+      { x: 850, y: 1280, w: 325, z: 125, surface: 'bridge' },
+      { x: -120, y: 880, w: 325, z: 38, surface: 'boost_current' },
+      { x: -820, y: 1620, w: 330, z: 0, surface: 'ice_water' },
+      { x: -1850, y: 1820, w: 340, z: 0, surface: 'ice_water' },
+      { x: -2650, y: 1380, w: 345, z: 0, surface: 'ice_water' },
+      { x: -2320, y: 680, w: 335, z: 0, surface: 'boost_current', tunnel: 'ice_cavern' },
+      { x: -2550, y: -250, w: 330, z: 0, surface: 'ice_water', tunnel: 'ice_cavern' },
+      { x: -2350, y: -1220, w: 335, z: 0, surface: 'ice_water', tunnel: 'ice_cavern' },
+      { x: -1450, y: -1700, w: 340, z: 0, surface: 'ice_water' },
     ],
     branches: [
       {
         id: 'glacier_cut',
         label: 'Grieta Glaciar',
-        forkIdx: 1,
-        mergeIdx: 4,
+        forkIdx: 5,
+        mergeIdx: 8,
         points: [
-          { x: 1850, y: -750, w: 255, z: 0, surface: 'boost_current' },
-          { x: 2500, y: -400, w: 255, z: 0, surface: 'ice_water' },
+          { x: 1840, y: -440, w: 250, z: 0, surface: 'boost_current' },
+          { x: 1460, y: 40, w: 250, z: 0, surface: 'ice_water' },
         ],
       },
       {
         id: 'fjord_shortcut',
         label: 'Paso de Témpanos',
-        forkIdx: 6,
-        mergeIdx: 10,
+        forkIdx: 11,
+        mergeIdx: 15,
         points: [
-          { x: -400, y: 580, w: 260, z: 0, surface: 'ice_water' },
-          { x: -1650, y: 450, w: 260, z: 0, surface: 'boost_current' },
+          { x: -1480, y: 1180, w: 255, z: 0, surface: 'ice_water' },
+          { x: -1850, y: 320, w: 255, z: 0, surface: 'boost_current' },
         ],
       },
     ],
@@ -465,7 +478,7 @@ export const TRACK_DEFS: TrackDef[] = [
   {
     id: 'swamp',
     name: 'Pantano Encantado',
-    subtitle: 'Bayou misterioso · Manglares, remolinos, niebla y luciérnagas',
+    subtitle: 'Laberinto sinuoso · Curvas ciegas bajo raíces, manglares y lodo',
     biome: 'swamp',
     swatch: 'linear-gradient(135deg, #1a2e05 0%, #84cc16 100%)',
     skyTop: '#040e06',
@@ -477,39 +490,43 @@ export const TRACK_DEFS: TrackDef[] = [
     neonSecondary: '#facc15',
     bankColor: '#14532d',
     points: [
-      { x: -500, y: -1620, w: 315, z: 0 },
-      { x: 650, y: -1620, w: 310, z: 0 },
-      { x: 1750, y: -1350, w: 305, z: 42, surface: 'bridge' },
-      { x: 2520, y: -420, w: 310, z: 118, surface: 'bridge' },
-      { x: 2300, y: 780, w: 310, z: 38, surface: 'bridge' },
-      { x: 1350, y: 1620, w: 315, z: 0 },
-      { x: 250, y: 1220, w: 305, z: 0 },
-      { x: -650, y: 1760, w: 310, z: 0 },
-      { x: -1850, y: 1420, w: 310, z: 0, tunnel: 'swamp_canopy' },
-      { x: -2650, y: 520, w: 300, z: 0, tunnel: 'swamp_canopy' },
-      { x: -2420, y: -680, w: 310, z: 0, tunnel: 'swamp_canopy' },
-      { x: -1520, y: -1520, w: 315, z: 0 },
+      { x: -450, y: -1750, w: 295, z: 0 },
+      { x: 450, y: -1750, w: 285, z: 0 },
+      { x: 1450, y: -1620, w: 265, z: 0 },
+      { x: 2180, y: -980, w: 260, z: 45, surface: 'bridge' },
+      { x: 1620, y: -150, w: 255, z: 120, surface: 'bridge' },
+      { x: 2480, y: 580, w: 260, z: 35, surface: 'bridge' },
+      { x: 2120, y: 1580, w: 265, z: 0 },
+      { x: 1180, y: 1820, w: 255, z: 0 },
+      { x: 420, y: 920, w: 245, z: 0, surface: 'boost_current' },
+      { x: -350, y: 1680, w: 255, z: 0 },
+      { x: -1250, y: 1580, w: 250, z: 0, tunnel: 'swamp_canopy' },
+      { x: -1820, y: 680, w: 245, z: 0, tunnel: 'swamp_canopy' },
+      { x: -2620, y: 820, w: 250, z: 0, tunnel: 'swamp_canopy' },
+      { x: -2650, y: -280, w: 255, z: 0, tunnel: 'swamp_canopy' },
+      { x: -1750, y: -680, w: 255, z: 0, surface: 'boost_current' },
+      { x: -2180, y: -1480, w: 275, z: 0 },
+      { x: -1350, y: -1750, w: 295, z: 0 },
     ],
     branches: [
       {
         id: 'gator_pass',
         label: 'Paso del Manglar',
-        forkIdx: 1,
-        mergeIdx: 5,
+        forkIdx: 2,
+        mergeIdx: 6,
         points: [
-          { x: 1750, y: -350, w: 255, z: 0, surface: 'water' },
-          { x: 2450, y: -360, w: 255, z: 0, surface: 'boost_current' },
-          { x: 1650, y: 750, w: 255, z: 0, surface: 'water' },
+          { x: 1160, y: -480, w: 240, z: 0, surface: 'water' },
+          { x: 1360, y: 660, w: 240, z: 0, surface: 'boost_current' },
         ],
       },
       {
         id: 'bayou_cut',
         label: 'Ciénaga de Lodo',
-        forkIdx: 7,
-        mergeIdx: 10,
+        forkIdx: 9,
+        mergeIdx: 14,
         points: [
-          { x: -1450, y: 700, w: 255, z: 0, surface: 'mud' },
-          { x: -1750, y: -250, w: 255, z: 0, surface: 'boost_current' },
+          { x: -950, y: 740, w: 245, z: 0, surface: 'mud' },
+          { x: -1220, y: -120, w: 245, z: 0, surface: 'boost_current' },
         ],
       },
     ],
@@ -517,7 +534,7 @@ export const TRACK_DEFS: TrackDef[] = [
   {
     id: 'volcano',
     name: 'Caldera Volcánica',
-    subtitle: 'Infierno geotérmico · Géiseres lanzadores, lava y rocas rodantes',
+    subtitle: 'Alta velocidad y saltos · Rectas gigantes y rampas sobre lava',
     biome: 'volcano',
     swatch: 'linear-gradient(135deg, #1c1917 0%, #f97316 100%)',
     skyTop: '#120403',
@@ -529,39 +546,42 @@ export const TRACK_DEFS: TrackDef[] = [
     neonSecondary: '#facc15',
     bankColor: '#292524',
     points: [
-      { x: -550, y: -1650, w: 280, z: 0 },
-      { x: 750, y: -1650, w: 275, z: 0 },
-      { x: 1920, y: -1320, w: 265, z: 0, surface: 'lava_channel', tunnel: 'volcano_magma' },
-      { x: 2660, y: -420, w: 265, z: 0, surface: 'lava_channel', tunnel: 'volcano_magma' },
-      { x: 2420, y: 760, w: 270, z: 0, surface: 'lava_channel', tunnel: 'volcano_magma' },
-      { x: 1620, y: 1650, w: 275, z: 0 },
-      { x: 520, y: 1580, w: 270, z: 0, surface: 'boost_current' },
-      { x: -480, y: 1800, w: 275, z: 0 },
-      { x: -1650, y: 1550, w: 275, z: 50, surface: 'bridge' },
-      { x: -2600, y: 680, w: 270, z: 140, surface: 'bridge' },
-      { x: -2600, y: -520, w: 275, z: 50, surface: 'bridge' },
-      { x: -1850, y: -1450, w: 280, z: 0 },
+      { x: -600, y: -1350, w: 305, z: 0 },
+      { x: 250, y: -1350, w: 305, z: 0, surface: 'boost_current' },
+      { x: 1150, y: -1350, w: 300, z: 0, surface: 'ramp' },
+      { x: 2050, y: -1350, w: 300, z: 0, surface: 'lava_channel' },
+      { x: 2880, y: -950, w: 305, z: 0, surface: 'lava_channel', tunnel: 'volcano_magma' },
+      { x: 3220, y: -150, w: 305, z: 0, surface: 'lava_channel', tunnel: 'volcano_magma' },
+      { x: 2920, y: 720, w: 305, z: 0, surface: 'boost_current', tunnel: 'volcano_magma' },
+      { x: 2050, y: 1220, w: 300, z: 0 },
+      { x: 1100, y: 1250, w: 300, z: 0, surface: 'ramp' },
+      { x: 150, y: 1220, w: 300, z: 0, surface: 'boost_current' },
+      { x: -800, y: 1250, w: 300, z: 55, surface: 'bridge' },
+      { x: -1750, y: 1220, w: 300, z: 140, surface: 'bridge' },
+      { x: -2750, y: 860, w: 305, z: 50, surface: 'bridge' },
+      { x: -3180, y: -40, w: 310, z: 0, surface: 'boost_current' },
+      { x: -2820, y: -940, w: 310, z: 0 },
+      { x: -1750, y: -1350, w: 305, z: 0 },
     ],
     branches: [
       {
         id: 'magma_bridge',
         label: 'Atajo Térmico',
-        forkIdx: 1,
-        mergeIdx: 5,
+        forkIdx: 3,
+        mergeIdx: 7,
         points: [
-          { x: 1450, y: -650, w: 245, z: 0, surface: 'bridge' },
-          { x: 1550, y: 550, w: 245, z: 0, surface: 'boost_current' },
+          { x: 2240, y: -520, w: 250, z: 0, surface: 'ramp' },
+          { x: 2320, y: 480, w: 250, z: 0, surface: 'boost_current' },
         ],
       },
       {
         id: 'basalt_docks',
         label: 'Grieta de Basalto',
-        forkIdx: 7,
-        mergeIdx: 11,
+        forkIdx: 11,
+        mergeIdx: 15,
         points: [
-          { x: -1750, y: 750, w: 250, z: 0, surface: 'lava_channel' },
-          { x: -2550, y: 100, w: 250, z: 0, surface: 'boost_current' },
-          { x: -1850, y: -650, w: 250, z: 0, surface: 'ramp' },
+          { x: -2140, y: 520, w: 255, z: 0, surface: 'lava_channel' },
+          { x: -2280, y: -480, w: 255, z: 0, surface: 'ramp' },
         ],
       },
     ],
@@ -569,7 +589,7 @@ export const TRACK_DEFS: TrackDef[] = [
   {
     id: 'pirate',
     name: 'Cala Pirata y Ruinas',
-    subtitle: 'Tormenta en alta mar · Galeones rampa, cueva del tesoro y cañones',
+    subtitle: 'Circuito mixto extremo · Zigzag entre galeones, cueva espiral y salto final',
     biome: 'pirate',
     swatch: 'linear-gradient(135deg, #0f172a 0%, #fbbf24 100%)',
     skyTop: '#050b18',
@@ -581,40 +601,44 @@ export const TRACK_DEFS: TrackDef[] = [
     neonSecondary: '#38bdf8',
     bankColor: '#44403c',
     points: [
-      { x: -450, y: -1650, w: 360, z: 0 },
-      { x: 750, y: -1650, w: 350, z: 0, surface: 'boost_current' },
-      { x: 1850, y: -1350, w: 345, z: 48, surface: 'bridge' },
-      { x: 2650, y: -420, w: 345, z: 128, surface: 'bridge' },
-      { x: 2520, y: 680, w: 350, z: 42, surface: 'boost_current' },
-      { x: 1620, y: 1580, w: 355, z: 0 },
-      { x: 520, y: 1750, w: 350, z: 0 },
-      { x: -580, y: 1420, w: 345, z: 0 },
-      { x: -1680, y: 1720, w: 350, z: 0, surface: 'boost_current', tunnel: 'treasure_cave' },
-      { x: -2580, y: 920, w: 340, z: 0, tunnel: 'treasure_cave' },
-      { x: -2650, y: -280, w: 350, z: 0, tunnel: 'treasure_cave' },
-      { x: -2020, y: -1280, w: 345, z: 0 },
-      { x: -1280, y: -1650, w: 360, z: 0 },
+      { x: -450, y: -1750, w: 355, z: 0 },
+      { x: 550, y: -1750, w: 350, z: 0, surface: 'boost_current' },
+      { x: 1550, y: -1700, w: 345, z: 0 },
+      { x: 2480, y: -1420, w: 320, z: 0, surface: 'ramp' },
+      { x: 1850, y: -620, w: 310, z: 0 },
+      { x: 2720, y: 120, w: 310, z: 0, surface: 'boost_current' },
+      { x: 1920, y: 880, w: 315, z: 0, surface: 'ramp' },
+      { x: 2480, y: 1680, w: 330, z: 0 },
+      { x: 1450, y: 1920, w: 330, z: 48, surface: 'bridge' },
+      { x: 380, y: 1780, w: 325, z: 130, surface: 'bridge' },
+      { x: -550, y: 1850, w: 330, z: 42, surface: 'boost_current' },
+      { x: -1580, y: 1650, w: 330, z: 0, tunnel: 'treasure_cave' },
+      { x: -2520, y: 1080, w: 325, z: 0, tunnel: 'treasure_cave' },
+      { x: -2750, y: 80, w: 325, z: 0, tunnel: 'treasure_cave' },
+      { x: -2180, y: -760, w: 330, z: 0, surface: 'boost_current', tunnel: 'treasure_cave' },
+      { x: -2550, y: -1480, w: 340, z: 0 },
+      { x: -1350, y: -1750, w: 355, z: 0, surface: 'ramp' },
     ],
     branches: [
       {
         id: 'galleon_shortcut',
         label: 'Salto del Galeón',
-        forkIdx: 1,
-        mergeIdx: 5,
+        forkIdx: 2,
+        mergeIdx: 7,
         points: [
-          { x: 1820, y: -420, w: 265, z: 0, surface: 'ramp' },
-          { x: 2550, y: 120, w: 265, z: 0, surface: 'boost_current' },
-          { x: 1650, y: 880, w: 265, z: 0, surface: 'ramp' },
+          { x: 1180, y: -780, w: 260, z: 0, surface: 'ramp' },
+          { x: 1120, y: 150, w: 260, z: 0, surface: 'boost_current' },
+          { x: 1280, y: 1050, w: 260, z: 0, surface: 'ramp' },
         ],
       },
       {
         id: 'corsair_cove',
         label: 'Desfiladero del Tesoro',
-        forkIdx: 7,
-        mergeIdx: 11,
+        forkIdx: 10,
+        mergeIdx: 15,
         points: [
-          { x: -1580, y: 650, w: 265, z: 0, surface: 'water' },
-          { x: -1750, y: -380, w: 265, z: 0, surface: 'boost_current' },
+          { x: -1150, y: 920, w: 265, z: 0, surface: 'water' },
+          { x: -1480, y: -180, w: 265, z: 0, surface: 'boost_current' },
         ],
       },
     ],
@@ -681,6 +705,12 @@ export function sampleClosedSpline(
   laneId = 'main'
 ): TrackSample[] {
   const n = points.length;
+  const curve = new CatmullRomCurve3(
+    points.map((p) => new Vector3(p.x, p.y, p.z ?? 0)),
+    true,
+    'catmullrom',
+    0.5
+  );
   const raw: { x: number; y: number; z: number; w: number; surface: SurfaceType; tunnel: TunnelTheme | null }[] = [];
   for (let i = 0; i < n; i++) {
     const p0 = points[(i - 1 + n) % n];
@@ -689,11 +719,12 @@ export function sampleClosedSpline(
     const p3 = points[(i + 2) % n];
     for (let k = 0; k < samplesPerSegment; k++) {
       const t = k / samplesPerSegment;
-      const z = catmullRom(p0.z ?? 0, p1.z ?? 0, p2.z ?? 0, p3.z ?? 0, t);
+      const u = (i + t) / n;
+      const pos = curve.getPoint(u);
       raw.push({
-        x: catmullRom(p0.x, p1.x, p2.x, p3.x, t),
-        y: catmullRom(p0.y, p1.y, p2.y, p3.y, t),
-        z: Math.max(0, z),
+        x: pos.x,
+        y: pos.y,
+        z: Math.max(0, pos.z),
         w: catmullRom(p0.w, p1.w, p2.w, p3.w, t),
         surface: t < 0.5 ? (p1.surface ?? 'water') : (p2.surface ?? 'water'),
         tunnel: t < 0.5 ? (p1.tunnel ?? null) : (p2.tunnel ?? null),
@@ -750,6 +781,13 @@ export function sampleBranchSpline(
   const preStart = mainPoints[(branch.forkIdx - 1 + n) % n];
   const postEnd = mainPoints[(branch.mergeIdx + 1) % n];
   const fullPts = [preStart, startPt, ...branch.points, endPt, postEnd];
+  const innerPts = [startPt, ...branch.points, endPt];
+  const branchCurve = new CatmullRomCurve3(
+    innerPts.map((p) => new Vector3(p.x, p.y, p.z ?? 0)),
+    false,
+    'catmullrom',
+    0.5
+  );
 
   const sStart = branch.forkIdx / n;
   const sEnd = branch.mergeIdx / n;
@@ -765,11 +803,12 @@ export function sampleBranchSpline(
     const steps = i === segCount ? samplesPerSegment + 1 : samplesPerSegment;
     for (let k = 0; k < steps; k++) {
       const t = k / samplesPerSegment;
-      const z = catmullRom(p0.z ?? 0, p1.z ?? 0, p2.z ?? 0, p3.z ?? 0, t);
+      const u = Math.min(1, Math.max(0, (i - 1 + t) / segCount));
+      const pos = branchCurve.getPoint(u);
       raw.push({
-        x: catmullRom(p0.x, p1.x, p2.x, p3.x, t),
-        y: catmullRom(p0.y, p1.y, p2.y, p3.y, t),
-        z: Math.max(0, z),
+        x: pos.x,
+        y: pos.y,
+        z: Math.max(0, pos.z),
         w: catmullRom(p0.w, p1.w, p2.w, p3.w, t),
         surface: t < 0.5 ? (p1.surface ?? 'water') : (p2.surface ?? 'water'),
         tunnel: t < 0.5 ? (p1.tunnel ?? null) : (p2.tunnel ?? null),
@@ -832,6 +871,7 @@ export function generateTrackCoins(
       coins.push({
         x: sPt.x + sPt.nx * baseOffset,
         y: sPt.y + sPt.ny * baseOffset,
+        z: sPt.z,
         phase: (i + k) * 0.45,
       });
     }
@@ -839,7 +879,7 @@ export function generateTrackCoins(
   for (const br of branches) {
     for (let i = 5; i < br.samples.length - 4; i += 10) {
       const pt = br.samples[i];
-      coins.push({ x: pt.x, y: pt.y, phase: i * 0.5 });
+      coins.push({ x: pt.x, y: pt.y, z: pt.z, phase: i * 0.5 });
     }
   }
   return coins;
@@ -1393,4 +1433,282 @@ export function evaluateAiPowerDecision(ctx: AiCombatContext): boolean {
     default:
       return true;
   }
+}
+
+export interface HullColliderDims {
+  halfSpine: number;
+  radius: number;
+  mass: number;
+}
+
+export function getHullColliderDims(
+  hullType: VehicleDef['hullType']
+): HullColliderDims {
+  switch (hullType) {
+    case 'jetski':
+      return { halfSpine: 19, radius: 16, mass: 0.92 };
+    case 'speedboat':
+      return { halfSpine: 24, radius: 18, mass: 1.05 };
+    case 'yacht':
+      return { halfSpine: 24, radius: 21, mass: 1.25 };
+    case 'bathtub':
+      return { halfSpine: 19, radius: 19, mass: 1.08 };
+    case 'rubberduck':
+      return { halfSpine: 18, radius: 20, mass: 1.0 };
+  }
+}
+
+export interface CollisionRacerBody {
+  x: number;
+  y: number;
+  airZ: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  hullType: VehicleDef['hullType'];
+  shieldTimer: number;
+}
+
+export interface VehicleCollisionResult {
+  collided: boolean;
+  impactX: number;
+  impactY: number;
+  impactZ: number;
+  normalX: number;
+  normalY: number;
+  impactStrength: number;
+  shieldKnock: boolean;
+}
+
+function closestPointsOnSegments2D(
+  ax0: number,
+  ay0: number,
+  ax1: number,
+  ay1: number,
+  bx0: number,
+  by0: number,
+  bx1: number,
+  by1: number
+): { pAx: number; pAy: number; pBx: number; pBy: number } {
+  const ux = ax1 - ax0;
+  const uy = ay1 - ay0;
+  const vx = bx1 - bx0;
+  const vy = by1 - by0;
+  const wx = ax0 - bx0;
+  const wy = ay0 - by0;
+
+  const a = ux * ux + uy * uy;
+  const b = ux * vx + uy * vy;
+  const c = vx * vx + vy * vy;
+  const d = ux * wx + uy * wy;
+  const e = vx * wx + vy * wy;
+  const D = a * c - b * b;
+
+  let sN: number;
+  let sD = D;
+  let tN: number;
+  let tD = D;
+
+  if (D < 1e-6) {
+    sN = 0;
+    sD = 1;
+    tN = e;
+    tD = c;
+  } else {
+    sN = b * e - c * d;
+    tN = a * e - b * d;
+    if (sN < 0) {
+      sN = 0;
+      tN = e;
+      tD = c;
+    } else if (sN > sD) {
+      sN = sD;
+      tN = e + b;
+      tD = c;
+    }
+  }
+
+  if (tN < 0) {
+    tN = 0;
+    if (-d < 0) sN = 0;
+    else if (-d > a) sN = sD;
+    else {
+      sN = -d;
+      sD = a;
+    }
+  } else if (tN > tD) {
+    tN = tD;
+    if (-d + b < 0) sN = 0;
+    else if (-d + b > a) sN = sD;
+    else {
+      sN = -d + b;
+      sD = a;
+    }
+  }
+
+  const sc = Math.abs(sN) < 1e-6 ? 0 : sN / sD;
+  const tc = Math.abs(tN) < 1e-6 ? 0 : tN / tD;
+  return {
+    pAx: ax0 + sc * ux,
+    pAy: ay0 + sc * uy,
+    pBx: bx0 + tc * vx,
+    pBy: by0 + tc * vy,
+  };
+}
+
+/**
+ * Solid oriented-capsule hull collision resolver between two watercrafts:
+ * 1. Ignores vertical deck crossings (e.g., Figure-8 City overpass z=145 vs lower canal z=0).
+ * 2. Performs immediate zero-overlap positional separation along collision normal.
+ * 3. Resolves realistic sideswipe lateral shove & rear-end momentum transfer.
+ * 4. Shield Bubble preserves the shielded racer's speed intact while knocking the rival aside.
+ */
+export function resolveVehicleCollision(
+  a: CollisionRacerBody,
+  b: CollisionRacerBody
+): VehicleCollisionResult {
+  // Elevation clearance guard: bridge overpass vs underpass never collide
+  if (Math.abs(a.airZ - b.airZ) > 36) {
+    return {
+      collided: false,
+      impactX: 0,
+      impactY: 0,
+      impactZ: 0,
+      normalX: 0,
+      normalY: 0,
+      impactStrength: 0,
+      shieldKnock: false,
+    };
+  }
+
+  const dimA = getHullColliderDims(a.hullType);
+  const dimB = getHullColliderDims(b.hullType);
+
+  const fAx = Math.cos(a.angle);
+  const fAy = Math.sin(a.angle);
+  const fBx = Math.cos(b.angle);
+  const fBy = Math.sin(b.angle);
+
+  const closest = closestPointsOnSegments2D(
+    a.x - fAx * dimA.halfSpine,
+    a.y - fAy * dimA.halfSpine,
+    a.x + fAx * dimA.halfSpine,
+    a.y + fAy * dimA.halfSpine,
+    b.x - fBx * dimB.halfSpine,
+    b.y - fBy * dimB.halfSpine,
+    b.x + fBx * dimB.halfSpine,
+    b.y + fBy * dimB.halfSpine
+  );
+
+  const dx = closest.pBx - closest.pAx;
+  const dy = closest.pBy - closest.pAy;
+  const dist = Math.hypot(dx, dy);
+  const minDist = dimA.radius + dimB.radius;
+
+  if (dist >= minDist) {
+    return {
+      collided: false,
+      impactX: 0,
+      impactY: 0,
+      impactZ: 0,
+      normalX: 0,
+      normalY: 0,
+      impactStrength: 0,
+      shieldKnock: false,
+    };
+  }
+
+  let nx = 1;
+  let ny = 0;
+  if (dist > 1e-4) {
+    nx = dx / dist;
+    ny = dy / dist;
+  } else {
+    const cDx = b.x - a.x;
+    const cDy = b.y - a.y;
+    const cLen = Math.hypot(cDx, cDy);
+    if (cLen > 1e-4) {
+      nx = cDx / cLen;
+      ny = cDy / cLen;
+    } else {
+      nx = -fAy;
+      ny = fAx;
+    }
+  }
+
+  const penetration = minDist - dist + 0.5;
+  const aShield = a.shieldTimer > 0;
+  const bShield = b.shieldTimer > 0;
+
+  if (aShield && !bShield) {
+    b.x += nx * penetration;
+    b.y += ny * penetration;
+  } else if (bShield && !aShield) {
+    a.x -= nx * penetration;
+    a.y -= ny * penetration;
+  } else {
+    const totalMass = dimA.mass + dimB.mass;
+    const shareA = dimB.mass / totalMass;
+    const shareB = dimA.mass / totalMass;
+    a.x -= nx * penetration * shareA;
+    a.y -= ny * penetration * shareA;
+    b.x += nx * penetration * shareB;
+    b.y += ny * penetration * shareB;
+  }
+
+  const relVx = b.vx - a.vx;
+  const relVy = b.vy - a.vy;
+  const velAlongNormal = relVx * nx + relVy * ny;
+  let impactStrength = Math.max(0.25, Math.min(2.0, -velAlongNormal / 260));
+  let shieldKnock = false;
+
+  if (aShield && !bShield) {
+    shieldKnock = true;
+    const speedA = Math.hypot(a.vx, a.vy);
+    const knockVel = Math.max(290, speedA * 0.52);
+    b.vx += nx * knockVel;
+    b.vy += ny * knockVel;
+    impactStrength = Math.max(0.85, impactStrength);
+  } else if (bShield && !aShield) {
+    shieldKnock = true;
+    const speedB = Math.hypot(b.vx, b.vy);
+    const knockVel = Math.max(290, speedB * 0.52);
+    a.vx -= nx * knockVel;
+    a.vy -= ny * knockVel;
+    impactStrength = Math.max(0.85, impactStrength);
+  } else {
+    const invMassA = 1 / dimA.mass;
+    const invMassB = 1 / dimB.mass;
+    const restitution = 0.42;
+
+    if (velAlongNormal < 0) {
+      const impulse = (-(1 + restitution) * velAlongNormal) / (invMassA + invMassB);
+      a.vx -= nx * impulse * invMassA;
+      a.vy -= ny * impulse * invMassA;
+      b.vx += nx * impulse * invMassB;
+      b.vy += ny * impulse * invMassB;
+    }
+
+    // Sideswipe lateral rub impulse when hulls scrape side-by-side at speed
+    const speedMax = Math.max(Math.hypot(a.vx, a.vy), Math.hypot(b.vx, b.vy));
+    const latDotA = Math.abs(nx * -fAy + ny * fAx);
+    if (latDotA > 0.55 && speedMax > 140) {
+      const shove = 58 * latDotA;
+      a.vx -= nx * shove * invMassA;
+      a.vy -= ny * shove * invMassA;
+      b.vx += nx * shove * invMassB;
+      b.vy += ny * shove * invMassB;
+    }
+  }
+
+  return {
+    collided: true,
+    impactX: (closest.pAx + closest.pBx) * 0.5,
+    impactY: (closest.pAy + closest.pBy) * 0.5,
+    impactZ: (a.airZ + b.airZ) * 0.5 * WORLD_SCALE + 0.45,
+    normalX: nx,
+    normalY: ny,
+    impactStrength,
+    shieldKnock,
+  };
 }

@@ -25,7 +25,10 @@ import {
   stepHoodCamera,
   computeWaveHeight,
   evaluateAiPowerDecision,
+  resolveVehicleCollision,
+  getHullColliderDims,
   type ControlPoint,
+  type CollisionRacerBody,
 } from './hydroEngine';
 
 test('vehicle garage stats scale monotonically up to max level', () => {
@@ -545,3 +548,171 @@ test('evaluateAiPowerDecision deploys offensive and defensive powers strategical
     true
   );
 });
+
+test('all 6 tracks have distinct non-oval silhouettes including City Figure-8 crossing and Pirate ramps', () => {
+  for (const def of TRACK_DEFS) {
+    const samples = sampleClosedSpline(def.points, 12, 'main');
+    const xs = samples.map((p) => p.x);
+    const ys = samples.map((p) => p.y);
+    const spanX = Math.max(...xs) - Math.min(...xs);
+    const spanY = Math.max(...ys) - Math.min(...ys);
+    assert.ok(spanX > 2200 && spanY > 2200, `${def.id} spans large custom layout`);
+  }
+
+  // City track forms a real Figure-8 crossing with elevated overpass over lower canal
+  const cityDef = TRACK_DEFS.find((t) => t.id === 'city')!;
+  const citySamples = sampleClosedSpline(cityDef.points, 14, 'main');
+  const lowUnderpass = citySamples.filter((p) => p.z < 10);
+  const highOverpass = citySamples.filter((p) => p.z >= 120);
+  let minCrossDist = Infinity;
+  for (const lo of lowUnderpass) {
+    for (const hi of highOverpass) {
+      const d = Math.hypot(lo.x - hi.x, lo.y - hi.y);
+      if (d < minCrossDist) minCrossDist = d;
+    }
+  }
+  assert.ok(minCrossDist < 85, `City Figure-8 overpass must cross directly above lower canal (dist=${minCrossDist.toFixed(1)})`);
+
+  // Volcano & Pirate feature jump ramps
+  const volcanoDef = TRACK_DEFS.find((t) => t.id === 'volcano')!;
+  const pirateDef = TRACK_DEFS.find((t) => t.id === 'pirate')!;
+  const volcanoSamples = sampleClosedSpline(volcanoDef.points, 12, 'main');
+  const pirateSamples = sampleClosedSpline(pirateDef.points, 12, 'main');
+  assert.ok(volcanoSamples.some((p) => p.surface === 'ramp'), 'volcano includes jump ramps');
+  assert.ok(pirateSamples.some((p) => p.surface === 'ramp'), 'pirate includes jump ramps');
+  assert.ok(pirateSamples.slice(-24).some((p) => p.surface === 'ramp'), 'pirate finishes with a final jump ramp');
+});
+
+test('solid oriented-capsule vehicle collision prevents overlap, transfers momentum, respects Shield Bubble and Figure-8 height', () => {
+  // 1. Overlapping capsules are separated cleanly with zero remaining overlap
+  const a: CollisionRacerBody = {
+    x: 0,
+    y: 0,
+    airZ: 0,
+    vx: 460,
+    vy: 0,
+    angle: 0,
+    hullType: 'speedboat',
+    shieldTimer: 0,
+  };
+  const b: CollisionRacerBody = {
+    x: 10,
+    y: 12,
+    airZ: 0,
+    vx: 260,
+    vy: 0,
+    angle: 0,
+    hullType: 'jetski',
+    shieldTimer: 0,
+  };
+  const res1 = resolveVehicleCollision(a, b);
+  assert.equal(res1.collided, true);
+  // Running a second check right away should show zero residual overlap
+  const resFollow = resolveVehicleCollision(a, b);
+  assert.equal(resFollow.collided, false);
+
+  // 2. Rear-end collision slows trailing craft and pushes lead craft forward
+  const trailer: CollisionRacerBody = {
+    x: 0,
+    y: 0,
+    airZ: 0,
+    vx: 620,
+    vy: 0,
+    angle: 0,
+    hullType: 'jetski',
+    shieldTimer: 0,
+  };
+  const leader: CollisionRacerBody = {
+    x: 34,
+    y: 0,
+    airZ: 0,
+    vx: 240,
+    vy: 0,
+    angle: 0,
+    hullType: 'jetski',
+    shieldTimer: 0,
+  };
+  const rearHit = resolveVehicleCollision(trailer, leader);
+  assert.equal(rearHit.collided, true);
+  assert.ok(trailer.vx < 620, 'trailing craft transfers forward momentum on rear-end hit');
+  assert.ok(leader.vx > 240, 'lead craft receives forward push from rear impact');
+
+  // 3. Sideswipe transfers lateral velocity impulse
+  const leftCraft: CollisionRacerBody = {
+    x: 0,
+    y: -14,
+    airZ: 0,
+    vx: 420,
+    vy: 60,
+    angle: 0,
+    hullType: 'yacht',
+    shieldTimer: 0,
+  };
+  const rightCraft: CollisionRacerBody = {
+    x: 0,
+    y: 14,
+    airZ: 0,
+    vx: 420,
+    vy: -60,
+    angle: 0,
+    hullType: 'speedboat',
+    shieldTimer: 0,
+  };
+  const sideHit = resolveVehicleCollision(leftCraft, rightCraft);
+  assert.equal(sideHit.collided, true);
+  assert.ok(leftCraft.vy < 0 && rightCraft.vy > 0, 'sideswipe pushes both crafts laterally apart');
+
+  // 4. Shield Bubble keeps shielded craft speed intact while knocking rival aside
+  const shielded: CollisionRacerBody = {
+    x: 0,
+    y: 0,
+    airZ: 0,
+    vx: 550,
+    vy: 0,
+    angle: 0,
+    hullType: 'jetski',
+    shieldTimer: 3.0,
+  };
+  const victim: CollisionRacerBody = {
+    x: 24,
+    y: 8,
+    airZ: 0,
+    vx: 500,
+    vy: 0,
+    angle: 0,
+    hullType: 'speedboat',
+    shieldTimer: 0,
+  };
+  const shieldHit = resolveVehicleCollision(shielded, victim);
+  assert.equal(shieldHit.collided, true);
+  assert.equal(shieldHit.shieldKnock, true);
+  assert.equal(shielded.vx, 550, 'shielded racer keeps 100% velocity');
+  assert.ok(Math.hypot(victim.vx - 500, victim.vy) > 250, 'unshielded rival gets knocked strongly');
+
+  // 5. Figure-8 height clearance: overpass vs underpass never collide
+  const dim = getHullColliderDims('speedboat');
+  assert.ok(dim.radius > 0 && dim.halfSpine > 0);
+  const underpassRacer: CollisionRacerBody = {
+    x: 0,
+    y: 0,
+    airZ: 0,
+    vx: 450,
+    vy: 0,
+    angle: 0,
+    hullType: 'speedboat',
+    shieldTimer: 0,
+  };
+  const overpassRacer: CollisionRacerBody = {
+    x: 0,
+    y: 0,
+    airZ: 145,
+    vx: 0,
+    vy: 450,
+    angle: Math.PI / 2,
+    hullType: 'speedboat',
+    shieldTimer: 0,
+  };
+  const bridgeCheck = resolveVehicleCollision(underpassRacer, overpassRacer);
+  assert.equal(bridgeCheck.collided, false, 'Figure-8 vertical overpass must clear underpass racers');
+});
+

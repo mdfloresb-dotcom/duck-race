@@ -1102,11 +1102,15 @@ export class HydroSceneRenderer {
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
-    for (const pt of track.main) {
+    const expandBounds = (pt: { x: number; y: number }) => {
       if (pt.x < minX) minX = pt.x;
       if (pt.x > maxX) maxX = pt.x;
       if (pt.y < minY) minY = pt.y;
       if (pt.y > maxY) maxY = pt.y;
+    };
+    for (const pt of track.main) expandBounds(pt);
+    for (const br of track.branches) {
+      for (const pt of br.samples) expandBounds(pt);
     }
     const pad = 18;
     const scale = Math.min((w - pad * 2) / (maxX - minX || 1), (h - pad * 2) / (maxY - minY || 1));
@@ -1115,6 +1119,7 @@ export class HydroSceneRenderer {
     this.minimapTransform = { scale, ox, oy };
 
     const drawPath = (arr: { x: number; y: number }[], closed: boolean, color: string, lw: number) => {
+      if (arr.length < 2) return;
       bctx.strokeStyle = color;
       bctx.lineWidth = lw;
       bctx.lineCap = 'round';
@@ -1130,11 +1135,41 @@ export class HydroSceneRenderer {
       bctx.stroke();
     };
 
-    drawPath(track.main, true, 'rgba(34, 211, 238, 0.25)', 12);
-    drawPath(track.main, true, '#22d3ee', 4.5);
+    const drawContiguousElevation = (elevated: boolean, color: string, lw: number) => {
+      const n = track.main.length;
+      bctx.strokeStyle = color;
+      bctx.lineWidth = lw;
+      bctx.lineCap = 'round';
+      bctx.lineJoin = 'round';
+      let run: { x: number; y: number }[] = [];
+      const flush = () => {
+        if (run.length >= 2) drawPath(run, false, color, lw);
+        run = [];
+      };
+      for (let i = 0; i <= n; i++) {
+        const pt = track.main[i % n];
+        const isHigh = pt.z > 55;
+        if (isHigh === elevated) {
+          run.push(pt);
+        } else {
+          flush();
+        }
+      }
+      flush();
+    };
+
+    // Base glow + lower canal pass
+    drawPath(track.main, true, 'rgba(34, 211, 238, 0.22)', 12);
+    drawContiguousElevation(false, '#0ea5e9', 4.5);
+
+    // Branches / shortcuts
     for (const br of track.branches) {
-      drawPath(br.samples, false, 'rgba(250, 204, 21, 0.72)', 3);
+      drawPath(br.samples, false, 'rgba(250, 204, 21, 0.78)', 3.2);
     }
+
+    // Elevated overpass pass with crisp dark casing so Figure-8 crossings read unmistakably
+    drawContiguousElevation(true, 'rgba(4, 12, 26, 0.96)', 9.5);
+    drawContiguousElevation(true, '#67e8f9', 5.0);
 
     const sf = track.main[0];
     bctx.fillStyle = '#ffffff';
